@@ -5,7 +5,10 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 import pandas as pd
-import pyautogui
+try:
+    import pyautogui  # requer display; em ambiente headless pode falhar
+except Exception:
+    pyautogui = None
 from selenium import webdriver
 from selenium.webdriver import ActionChains
 from selenium.webdriver.chrome.options import Options
@@ -140,11 +143,13 @@ def _capture_screenshot(driver: webdriver.Chrome, pasta: str, nome: str):
     timestamp = datetime.now().strftime("%H-%M-%S")
     filename = f"{_simple_model(nome)}_{timestamp}.png"
     path = os.path.join(pasta, filename)
+    if pyautogui is None:
+        return None
     try:
         time.sleep(1)
         pyautogui.screenshot(path)
     except Exception:
-        pass
+        return None
     return path
 
 
@@ -445,4 +450,3 @@ def coletar_precos(stores=None, include=None, exclude=None):
     df_final.to_csv(HIST_PATH, sep=";", index=False, encoding="utf-8-sig")
     print("\n✅ Coleta finalizada com sucesso.")
     return df_final, pasta_nome
-
