@@ -82,6 +82,13 @@ export default function Prints() {
   }, [modalImg]);
 
   const imgUrl = (pasta, img) => `/api/prints/${pasta}/${img}`;
+  const deviceNameFromFilename = (filename) => {
+    if (!filename) return "";
+    const base = filename.replace(/\.(png|jpe?g)$/i, "");
+    const timeMatch = base.match(/(.+)_\d{2}-\d{2}-\d{2}$/);
+    const rawName = timeMatch ? timeMatch[1] : base;
+    return rawName.replace(/_/g, " ").trim();
+  };
 
   return (
     <div className="page">
@@ -127,12 +134,15 @@ export default function Prints() {
             <div className="gallery-grid">
               {imagens.map((img, i) => (
                 <figure key={i} className="thumb">
+                  <div className="thumb-title" title={deviceNameFromFilename(img)}>
+                    {deviceNameFromFilename(img)}
+                  </div>
                   <img
                     src={imgUrl(selecionada, img)}
                     alt={img}
                     onClick={() => setModalImg(imgUrl(selecionada, img))}
                   />
-                  <figcaption>
+                  <figcaption className="thumb-actions">
                     <a href={imgUrl(selecionada, img)} download>Baixar</a>
                   </figcaption>
                 </figure>

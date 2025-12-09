@@ -94,7 +94,7 @@ export default function Links() {
         {mensagem && <p className="status">{mensagem}</p>}
 
         {lojas.map((nomeGrupo) => (
-          <div key={nomeGrupo} className="table-container" style={{ marginTop: 16 }}>
+          <div key={nomeGrupo} className="table-container links-group" style={{ marginTop: 16 }}>
             <h3>{nomeGrupo}</h3>
             <table>
               <thead>

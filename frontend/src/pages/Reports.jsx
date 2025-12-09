@@ -162,7 +162,7 @@ export default function Reports() {
       if (cols.PIX) row.PIX = normMoney(d.PIX);
       if (cols.CREDITO)
         row.CARTAO_DE_CREDITO = normMoney(
-          d.CARTAO_DE_CREDITO || d.CREDITO || ""
+          d.CARTAO_DE_CREDITO || d.CREDITO || d.PARCELADO || ""
         );
       return row;
     });
@@ -459,7 +459,7 @@ export default function Reports() {
                   )}
                   {cols.CREDITO && (
                     <td className="price">
-                      {normMoney(item.CARTAO_DE_CREDITO || item.CREDITO)}
+                      {normMoney(item.CARTAO_DE_CREDITO || item.CREDITO || item.PARCELADO)}
                     </td>
                   )}
                 </tr>

@@ -303,6 +303,9 @@ def listar_historico():
         # Corrige nomes legados (ex: LOJA → SITE)
         if "LOJA" in df.columns and "SITE" not in df.columns:
             df["SITE"] = df["LOJA"]
+        # Aproveita coluna antiga PARCELADO caso CREDITO esteja vazio
+        if "PARCELADO" in df.columns and (df["CREDITO"] == "").all():
+            df["CREDITO"] = df["PARCELADO"]
 
         # Converte para lista de dicionários
         dados = df.to_dict(orient="records")
