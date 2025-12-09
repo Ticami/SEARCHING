@@ -1,6 +1,7 @@
 # FILE: backend/requirements.txt
 Flask==3.0.3
 Flask-Cors==4.0.0
+gunicorn==23.0.0
 
 pandas==2.2.3
 numpy==2.1.2
