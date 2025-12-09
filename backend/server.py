@@ -25,7 +25,7 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(PRINTS_DIR, exist_ok=True)
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="dist", static_url_path="")
 CORS(app)
 
 # ==============================
@@ -362,9 +362,23 @@ def schedule_set():
             })
     return jsonify({"message": "Agendamento atualizado", "config": cfg, "jobs": jobs})
 
-@app.route("/")
-def home():
-    return jsonify({"status": "Servidor Flask rodando 🚀"})
+@app.route("/api/health")
+def api_health():
+    return jsonify({"status": "Servidor Flask rodando"})
+
+
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_frontend(path):
+    """
+    Servir arquivos do build do frontend (dist).
+    Qualquer rota n?o-API cai aqui e devolve index.html para o SPA.
+    """
+    dist_dir = app.static_folder
+    full_path = os.path.join(dist_dir, path)
+    if path and os.path.exists(full_path):
+        return send_from_directory(dist_dir, path)
+    return send_from_directory(dist_dir, "index.html")
 
 @app.route("/api/coletar", methods=["POST"])
 def coletar_manual():

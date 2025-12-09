@@ -51,13 +51,9 @@ export default function Prints() {
     return `${dd}/${mm}/${yy2} ${hh}:${mi}`;
   };
 
-  const anosDisponiveis = Array.from(
-    new Set(
-      pastas
-        .map((p) => parsePastaDate(p)?.y)
-        .filter(Boolean)
-    )
-  ).sort((a, b) => b - a);
+  const anosDisponiveis = Array.from(new Set(pastas.map((p) => parsePastaDate(p)?.y).filter(Boolean))).sort(
+    (a, b) => b - a
+  );
 
   const pastasFiltradas = pastas.filter((p) => {
     const d = parsePastaDate(p);
@@ -94,20 +90,27 @@ export default function Prints() {
     <div className="page">
       <div className="card wide">
         <div className="card-header">
-          <h2>Prints</h2>
+          <div className="card-title">
+            <span className="eyebrow">Galeria</span>
+            <h2>Prints</h2>
+          </div>
         </div>
 
-        <div className="filters" style={{ marginBottom: 10 }}>
+        <div className="toolbar" style={{ marginBottom: 12 }}>
           <select value={mes} onChange={(e) => setMes(e.target.value)}>
             <option value="">Mês (todos)</option>
             {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-              <option key={m} value={m}>{m}</option>
+              <option key={m} value={m}>
+                {m}
+              </option>
             ))}
           </select>
           <select value={ano} onChange={(e) => setAno(e.target.value)}>
             <option value="">Ano (todos)</option>
             {anosDisponiveis.map((y) => (
-              <option key={y} value={y}>{y}</option>
+              <option key={y} value={y}>
+                {y}
+              </option>
             ))}
           </select>
         </div>
@@ -137,13 +140,11 @@ export default function Prints() {
                   <div className="thumb-title" title={deviceNameFromFilename(img)}>
                     {deviceNameFromFilename(img)}
                   </div>
-                  <img
-                    src={imgUrl(selecionada, img)}
-                    alt={img}
-                    onClick={() => setModalImg(imgUrl(selecionada, img))}
-                  />
+                  <img src={imgUrl(selecionada, img)} alt={img} onClick={() => setModalImg(imgUrl(selecionada, img))} />
                   <figcaption className="thumb-actions">
-                    <a href={imgUrl(selecionada, img)} download>Baixar</a>
+                    <a href={imgUrl(selecionada, img)} download>
+                      Baixar
+                    </a>
                   </figcaption>
                 </figure>
               ))}
@@ -152,9 +153,11 @@ export default function Prints() {
         )}
 
         {modalImg && (
-          <div className="modal" onClick={() => setModalImg("")}> 
+          <div className="modal" onClick={() => setModalImg("")}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <button className="icon-btn close" aria-label="Fechar" onClick={() => setModalImg("")}>×</button>
+              <button className="icon-btn close" aria-label="Fechar" onClick={() => setModalImg("")}>
+                ×
+              </button>
               <img src={modalImg} alt="Visualização" />
             </div>
           </div>

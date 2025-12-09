@@ -4,24 +4,17 @@ import Home from "./pages/Home";
 import Reports from "./pages/Reports";
 import Links from "./pages/Links";
 import Prints from "./pages/Prints";
-import Curves from "./pages/Curves";   // ƒª.‹÷? NOVA ABA
+import Curves from "./pages/Curves"; // nova rota
 import "./styles/global.css";
 
 export default function App() {
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [checkedAuth, setCheckedAuth] = useState(false);
-  const [input, setInput] = useState("");
-  const [error, setError] = useState("");
   const ACCESS_KEY = "searching_auth";
   const PASSCODE = "***REMOVED***";
-
-  useEffect(() => {
-    const saved = localStorage.getItem(ACCESS_KEY);
-    if (saved === PASSCODE) {
-      setIsAuthorized(true);
-    }
-    setCheckedAuth(true);
-  }, []);
+  const [input, setInput] = useState("");
+  const [error, setError] = useState("");
+  const [isAuthorized, setIsAuthorized] = useState(
+    () => localStorage.getItem(ACCESS_KEY) === PASSCODE
+  );
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -35,7 +28,13 @@ export default function App() {
     }
   };
 
-  if (!checkedAuth || !isAuthorized) {
+  useEffect(() => {
+    if (isAuthorized) {
+      localStorage.setItem(ACCESS_KEY, PASSCODE);
+    }
+  }, [isAuthorized]);
+
+  if (!isAuthorized) {
     return (
       <div className="auth-shell">
         <div className="auth-card">
@@ -61,54 +60,57 @@ export default function App() {
     <Router>
       <div className="layout">
         <aside className="sidebar">
-          <h2 className="logo">SEARCHING</h2>
+          <div className="sidebar-header">
+            <h2 className="logo">SEARCHING</h2>
+            <span className="chip chip-active" style={{ padding: "6px 10px", fontSize: 12 }}>v1.2.0</span>
+          </div>
 
           <nav>
             <NavLink
               to="/"
               end
-              className={({ isActive }) => (isActive ? "active" : "")}
+              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
             >
               Início
             </NavLink>
 
             <NavLink
               to="/reports"
-              className={({ isActive }) => (isActive ? "active" : "")}
+              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
             >
               Relatórios
             </NavLink>
 
             <NavLink
               to="/curves"
-              className={({ isActive }) => (isActive ? "active" : "")}
+              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
             >
               Curvas
             </NavLink>
 
             <NavLink
               to="/prints"
-              className={({ isActive }) => (isActive ? "active" : "")}
+              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
             >
               Prints
             </NavLink>
 
             <NavLink
               to="/links"
-              className={({ isActive }) => (isActive ? "active" : "")}
+              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
             >
               Links
             </NavLink>
           </nav>
 
-          <footer>by Mateus Ticami - v1.2.0</footer>
+          <footer>by Mateus Ticami</footer>
         </aside>
 
         <main className="content">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/reports" element={<Reports />} />
-            <Route path="/curves" element={<Curves />} /> {/* ƒª.‹÷? NOVA ROTA */}
+            <Route path="/curves" element={<Curves />} />
             <Route path="/prints" element={<Prints />} />
             <Route path="/links" element={<Links />} />
           </Routes>

@@ -8,21 +8,20 @@ export default function Links() {
   const [mensagem, setMensagem] = useState("");
 
   const carregar = async () => {
-  try {
-    const res = await fetch("/api/links");
-    const data = await res.json();
-    if (Array.isArray(data)) {
-      setLinks(data);
-    } else {
-      console.error("Resposta inesperada:", data);
+    try {
+      const res = await fetch("/api/links");
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setLinks(data);
+      } else {
+        console.error("Resposta inesperada:", data);
+        setLinks([]);
+      }
+    } catch (err) {
+      console.error("Falha ao conectar ao backend:", err);
       setLinks([]);
     }
-  } catch (err) {
-    console.error("Falha ao conectar ao backend:", err);
-    setLinks([]);
-  }
-};
-
+  };
 
   const adicionar = async () => {
     if (!novoNome || !novoLink) {
@@ -35,7 +34,7 @@ export default function Links() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nome: novoNome, link: novoLink, loja: novaLoja }),
       });
-      setMensagem("✅ Link adicionado!");
+      setMensagem("Link adicionado!");
       setNovoNome("");
       setNovoLink("");
       setNovaLoja("");
@@ -67,31 +66,42 @@ export default function Links() {
   return (
     <div className="page">
       <div className="card wide">
-        <h2>Links Monitorados</h2>
-
-        <div className="form">
-          <input
-            type="text"
-            placeholder="Nome do produto"
-            value={novoNome}
-            onChange={(e) => setNovoNome(e.target.value)}
-          />
-          <input
-            type="text"
-            placeholder="URL do produto"
-            value={novoLink}
-            onChange={(e) => setNovoLink(e.target.value)}
-          />
-          <select value={novaLoja} onChange={(e) => setNovaLoja(e.target.value)}>
-            <option value="">Selecione a loja</option>
-            {lojas.map((l) => (
-              <option key={l} value={l}>{l}</option>
-            ))}
-          </select>
-          <button className="btn primary" onClick={adicionar}>Adicionar</button>
+        <div className="card-header">
+          <div className="card-title">
+            <span className="eyebrow">Catálogo monitorado</span>
+            <h2>Links Monitorados</h2>
+          </div>
         </div>
 
-        {mensagem && <p className="status">{mensagem}</p>}
+        <div className="card ghost stack">
+          <div className="form-inline">
+            <input
+              type="text"
+              placeholder="Nome do produto"
+              value={novoNome}
+              onChange={(e) => setNovoNome(e.target.value)}
+            />
+            <input
+              type="text"
+              placeholder="URL do produto"
+              value={novoLink}
+              onChange={(e) => setNovoLink(e.target.value)}
+            />
+            <select value={novaLoja} onChange={(e) => setNovaLoja(e.target.value)}>
+              <option value="">Selecione a loja</option>
+              {lojas.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                </option>
+              ))}
+            </select>
+            <button className="btn primary" onClick={adicionar}>
+              Adicionar
+            </button>
+          </div>
+
+          {mensagem && <p className="status">{mensagem}</p>}
+        </div>
 
         {lojas.map((nomeGrupo) => (
           <div key={nomeGrupo} className="table-container links-group" style={{ marginTop: 16 }}>
@@ -111,7 +121,9 @@ export default function Links() {
                 ))}
                 {grupos[nomeGrupo].length === 0 && (
                   <tr>
-                    <td colSpan={4} className="muted">Sem links cadastrados</td>
+                    <td colSpan={4} className="muted">
+                      Sem links cadastrados
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -170,7 +182,9 @@ function RowLink({ row, onChanged }) {
         {edit ? (
           <input value={draft.link} onChange={(e) => setDraft({ ...draft, link: e.target.value })} />
         ) : (
-          <a href={row.LINK} target="_blank" rel="noreferrer">abrir</a>
+          <a href={row.LINK} target="_blank" rel="noreferrer">
+            abrir
+          </a>
         )}
       </td>
       <td>
@@ -187,13 +201,21 @@ function RowLink({ row, onChanged }) {
       <td>
         {edit ? (
           <>
-            <button className="btn" onClick={salvar}>Salvar</button>
-            <button className="btn" style={{ marginLeft: 6 }} onClick={() => setEdit(false)}>Cancelar</button>
+            <button className="btn primary" onClick={salvar}>
+              Salvar
+            </button>
+            <button className="btn ghost" style={{ marginLeft: 6 }} onClick={() => setEdit(false)}>
+              Cancelar
+            </button>
           </>
         ) : (
           <>
-            <button className="btn" onClick={() => setEdit(true)}>Editar</button>
-            <button className="btn" style={{ marginLeft: 6 }} onClick={remover}>Remover</button>
+            <button className="btn secondary" onClick={() => setEdit(true)}>
+              Editar
+            </button>
+            <button className="btn ghost" style={{ marginLeft: 6 }} onClick={remover}>
+              Remover
+            </button>
           </>
         )}
       </td>

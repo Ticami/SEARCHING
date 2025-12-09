@@ -10,13 +10,12 @@ export default function Reports() {
     CREDITO: true,
   });
 
-  // filtros "estilo Excel"
   const [datasSelecionadas, setDatasSelecionadas] = useState([]);
   const [modelosSelecionados, setModelosSelecionados] = useState([]);
   const [lojasSelecionadas, setLojasSelecionadas] = useState([]);
   const [entreguesSelecionados, setEntreguesSelecionados] = useState([]);
 
-  const [filterOpen, setFilterOpen] = useState(null); // "DATA" | "MODELO" | "LOJA" | "ENTREGUE_POR" | null
+  const [filterOpen, setFilterOpen] = useState(null);
   const filterRef = useRef(null);
 
   const carregar = async () => {
@@ -95,21 +94,14 @@ export default function Reports() {
     const entregueAtual = (d.ENTREGUE_POR || "").trim();
     const dataRaw = (d.DATA || "").split(" ")[0];
 
-    const dataMatch =
-      datasSelecionadas.length === 0 || datasSelecionadas.includes(dataRaw);
-    const modeloMatch =
-      modelosSelecionados.length === 0 ||
-      modelosSelecionados.includes(modeloAtual);
-    const lojaMatch =
-      lojasSelecionadas.length === 0 || lojasSelecionadas.includes(lojaAtual);
-    const entregueMatch =
-      entreguesSelecionados.length === 0 ||
-      entreguesSelecionados.includes(entregueAtual);
+    const dataMatch = datasSelecionadas.length === 0 || datasSelecionadas.includes(dataRaw);
+    const modeloMatch = modelosSelecionados.length === 0 || modelosSelecionados.includes(modeloAtual);
+    const lojaMatch = lojasSelecionadas.length === 0 || lojasSelecionadas.includes(lojaAtual);
+    const entregueMatch = entreguesSelecionados.length === 0 || entreguesSelecionados.includes(entregueAtual);
 
     return dataMatch && modeloMatch && lojaMatch && entregueMatch;
   });
 
-  // fecha pop-up clicando fora
   useEffect(() => {
     const onClick = (e) => {
       if (!filterRef.current) return;
@@ -136,8 +128,7 @@ export default function Reports() {
     return `${d}-${m}-${y}`;
   };
 
-  const normMoney = (s) =>
-    (s || "").replace(/\s+/g, " ").replace(" ,", ",").trim();
+  const normMoney = (s) => (s || "").replace(/\s+/g, " ").replace(" ,", ",").trim();
 
   const exportarCSV = () => {
     if (filtrados.length === 0) return;
@@ -160,18 +151,12 @@ export default function Reports() {
         row.ENTREGUE_POR = d.ENTREGUE_POR || "";
       }
       if (cols.PIX) row.PIX = normMoney(d.PIX);
-      if (cols.CREDITO)
-        row.CARTAO_DE_CREDITO = normMoney(
-          d.CARTAO_DE_CREDITO || d.CREDITO || d.PARCELADO || ""
-        );
+      if (cols.CREDITO) row.CARTAO_DE_CREDITO = normMoney(d.CARTAO_DE_CREDITO || d.CREDITO || d.PARCELADO || "");
       return row;
     });
 
     const esc = (v) => `"${String(v).replaceAll('"', '""')}"`;
-    const csv = [
-      head.join(";"),
-      ...rows.map((r) => head.map((h) => esc(r[h] ?? "")).join(";")),
-    ].join("\r\n");
+    const csv = [head.join(";"), ...rows.map((r) => head.map((h) => esc(r[h] ?? "")).join(";"))].join("\r\n");
     const blob = new Blob(["\ufeff" + csv], {
       type: "text/csv;charset=utf-8;",
     });
@@ -183,85 +168,41 @@ export default function Reports() {
     URL.revokeObjectURL(url);
   };
 
-  // helper para desenhar menu de filtro estilo Excel
-  const renderFilterMenu = (
-    tipo,
-    valores,
-    selecionados,
-    setSelecionados,
-    labelFn
-  ) => {
+  const renderFilterMenu = (tipo, valores, selecionados, setSelecionados, labelFn) => {
     if (filterOpen !== tipo) return null;
     return (
-      <div
-        ref={filterRef}
-        className="card"
-        style={{
-          position: "absolute",
-          top: "100%",
-          left: 0,
-          marginTop: 4,
-          zIndex: 30,
-          minWidth: 240,
-          background: "#0f1722",
-          border: "1px solid #263041",
-          padding: 8,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 6,
-          }}
-        >
+      <div ref={filterRef} className="filter-menu card ghost stack">
+        <div className="section-heading">
           <strong>Filtrar {tipo.replace("_", " ")}</strong>
           <button className="icon-btn" onClick={() => setFilterOpen(null)}>
             ×
           </button>
         </div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-          <button className="btn" onClick={() => setSelecionados(valores)}>
+        <div className="toolbar">
+          <button className="btn ghost" onClick={() => setSelecionados(valores)}>
             Selecionar todos
           </button>
-          <button className="btn" onClick={() => setSelecionados([])}>
+          <button className="btn ghost" onClick={() => setSelecionados([])}>
             Limpar
           </button>
         </div>
-        <div
-          style={{
-            maxHeight: 220,
-            overflow: "auto",
-            display: "grid",
-            gap: 4,
-          }}
-        >
+        <div className="stack" style={{ maxHeight: 220, overflow: "auto" }}>
           {valores.map((v) => {
             const checked = selecionados.includes(v);
             return (
-              <label
-                key={v}
-                style={{ display: "flex", alignItems: "center", gap: 6 }}
-              >
+              <label key={v} className="row" style={{ justifyContent: "flex-start" }}>
                 <input
                   type="checkbox"
                   checked={checked}
                   onChange={(e) =>
-                    setSelecionados((prev) =>
-                      e.target.checked
-                        ? [...prev, v]
-                        : prev.filter((x) => x !== v)
-                    )
+                    setSelecionados((prev) => (e.target.checked ? [...prev, v] : prev.filter((x) => x !== v)))
                   }
                 />
                 <span>{labelFn ? labelFn(v) : v}</span>
               </label>
             );
           })}
-          {valores.length === 0 && (
-            <span className="muted">Nenhum valor disponível</span>
-          )}
+          {valores.length === 0 && <span className="muted">Nenhum valor disponível</span>}
         </div>
       </div>
     );
@@ -271,8 +212,11 @@ export default function Reports() {
     <div className="page">
       <div className="card wide">
         <div className="card-header">
-          <h2>Relatórios</h2>
-          <div className="filters" style={{ gap: 8 }}>
+          <div className="card-title">
+            <span className="eyebrow">Dados consolidados</span>
+            <h2>Relatórios</h2>
+          </div>
+          <div className="toolbar">
             <button className="btn" onClick={carregar}>
               Atualizar
             </button>
@@ -282,14 +226,11 @@ export default function Reports() {
           </div>
         </div>
 
-        {/* toggle de colunas (mantido) */}
-        <div className="card" style={{ marginBottom: 12 }}>
-          <div className="filters">
+        <div className="card ghost stack" style={{ marginBottom: 12 }}>
+          <p className="note">Ative/desative as colunas que deseja ver/exportar.</p>
+          <div className="toolbar">
             {Object.keys(cols).map((k) => (
-              <label
-                key={k}
-                style={{ display: "flex", alignItems: "center", gap: 6 }}
-              >
+              <label key={k} className="chip">
                 <input
                   type="checkbox"
                   checked={cols[k]}
@@ -311,57 +252,35 @@ export default function Reports() {
             <thead>
               <tr>
                 {cols.DATA && (
-                  <th style={{ position: "relative" }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                      }}
-                    >
+                  <th className="th-filter">
+                    <div className="row">
                       <span>DATA</span>
                       <button
                         className="icon-btn"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setFilterOpen(
-                            filterOpen === "DATA" ? null : "DATA"
-                          );
+                          setFilterOpen(filterOpen === "DATA" ? null : "DATA");
                         }}
                       >
-                        ▾
+                        ▼
                       </button>
                     </div>
-                    {renderFilterMenu(
-                      "DATA",
-                      datas,
-                      datasSelecionadas,
-                      setDatasSelecionadas,
-                      (d) => formatDateBR(d)
-                    )}
+                    {renderFilterMenu("DATA", datas, datasSelecionadas, setDatasSelecionadas, (d) => formatDateBR(d))}
                   </th>
                 )}
 
                 {cols.MODELO && (
-                  <th style={{ position: "relative" }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                      }}
-                    >
+                  <th className="th-filter">
+                    <div className="row">
                       <span>MODELO</span>
                       <button
                         className="icon-btn"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setFilterOpen(
-                            filterOpen === "MODELO" ? null : "MODELO"
-                          );
+                          setFilterOpen(filterOpen === "MODELO" ? null : "MODELO");
                         }}
                       >
-                        ▾
+                        ▼
                       </button>
                     </div>
                     {renderFilterMenu(
@@ -376,56 +295,33 @@ export default function Reports() {
 
                 {cols.LOJA && (
                   <>
-                    <th style={{ position: "relative" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 4,
-                        }}
-                      >
+                    <th className="th-filter">
+                      <div className="row">
                         <span>LOJA</span>
                         <button
                           className="icon-btn"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setFilterOpen(
-                              filterOpen === "LOJA" ? null : "LOJA"
-                            );
+                            setFilterOpen(filterOpen === "LOJA" ? null : "LOJA");
                           }}
                         >
-                          ▾
+                          ▼
                         </button>
                       </div>
-                      {renderFilterMenu(
-                        "LOJA",
-                        lojas,
-                        lojasSelecionadas,
-                        setLojasSelecionadas
-                      )}
+                      {renderFilterMenu("LOJA", lojas, lojasSelecionadas, setLojasSelecionadas)}
                     </th>
 
-                    <th style={{ position: "relative" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 4,
-                        }}
-                      >
+                    <th className="th-filter">
+                      <div className="row">
                         <span>ENTREGUE POR</span>
                         <button
                           className="icon-btn"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setFilterOpen(
-                              filterOpen === "ENTREGUE_POR"
-                                ? null
-                                : "ENTREGUE_POR"
-                            );
+                            setFilterOpen(filterOpen === "ENTREGUE_POR" ? null : "ENTREGUE_POR");
                           }}
                         >
-                          ▾
+                          ▼
                         </button>
                       </div>
                       {renderFilterMenu(
@@ -454,13 +350,9 @@ export default function Reports() {
                       <td>{item.ENTREGUE_POR || ""}</td>
                     </>
                   )}
-                  {cols.PIX && (
-                    <td className="price">{normMoney(item.PIX)}</td>
-                  )}
+                  {cols.PIX && <td className="price">{normMoney(item.PIX)}</td>}
                   {cols.CREDITO && (
-                    <td className="price">
-                      {normMoney(item.CARTAO_DE_CREDITO || item.CREDITO || item.PARCELADO)}
-                    </td>
+                    <td className="price">{normMoney(item.CARTAO_DE_CREDITO || item.CREDITO || item.PARCELADO)}</td>
                   )}
                 </tr>
               ))}
@@ -487,4 +379,3 @@ export default function Reports() {
     </div>
   );
 }
-
