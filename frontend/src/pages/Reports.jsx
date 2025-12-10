@@ -14,6 +14,10 @@ export default function Reports() {
   const [modelosSelecionados, setModelosSelecionados] = useState([]);
   const [lojasSelecionadas, setLojasSelecionadas] = useState([]);
   const [entreguesSelecionados, setEntreguesSelecionados] = useState([]);
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [draftLink, setDraftLink] = useState("");
+  const [salvandoLink, setSalvandoLink] = useState(false);
+  const [statusMsg, setStatusMsg] = useState("");
 
   const [filterOpen, setFilterOpen] = useState(null);
   const filterRef = useRef(null);
@@ -39,6 +43,23 @@ export default function Reports() {
   }, []);
 
   const siteFrom = (d) => d.LOJA || d.SITE || "";
+
+  const inferLoja = (url) => {
+    const u = String(url || "").toLowerCase();
+    if (u.includes("magazineluiza") || u.includes("magalu")) return "Magazine Luiza";
+    if (u.includes("amazon")) return "Amazon";
+    if (u.includes("casasbahia")) return "Casas Bahia";
+    return "";
+  };
+
+  const isErroBusca = (d) => {
+    const modelo = (d.MODELO || "").trim().toLowerCase();
+    const pixRaw = (d.PIX || "").trim().toLowerCase();
+    const credRaw = (d.CARTAO_DE_CREDITO || d.CREDITO || d.PARCELADO || "").trim().toLowerCase();
+    const modeloErro = ["oops", "oops!", "ops", "ops!", "erro"].includes(modelo);
+    const precoErro = ["n/a", "na", ""].includes(pixRaw) && ["n/a", "na", ""].includes(credRaw);
+    return modeloErro || precoErro;
+  };
 
   const lojas = useMemo(
     () =>
@@ -129,6 +150,52 @@ export default function Reports() {
   };
 
   const normMoney = (s) => (s || "").replace(/\s+/g, " ").replace(" ,", ",").trim();
+
+  const abrirEdicao = (idx, item) => {
+    setEditingIndex(idx);
+    setDraftLink(item.LINK || "");
+    setStatusMsg("");
+  };
+
+  const cancelarEdicao = () => {
+    setEditingIndex(null);
+    setDraftLink("");
+    setStatusMsg("");
+  };
+
+  const salvarLink = async (item) => {
+    if (!draftLink.trim()) {
+      setStatusMsg("Informe um link valido.");
+      return;
+    }
+    setSalvandoLink(true);
+    setStatusMsg("");
+    try {
+      const payload = {
+        originalNome: item.NOME || item.MODELO,
+        originalLink: item.LINK,
+        originalLoja: siteFrom(item),
+        nome: item.NOME || item.MODELO,
+        link: draftLink.trim(),
+        loja: inferLoja(draftLink) || siteFrom(item),
+      };
+      const res = await fetch("/api/links", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setStatusMsg("Link atualizado.");
+      setEditingIndex(null);
+      setDraftLink("");
+      carregar();
+    } catch (err) {
+      console.error("Erro ao salvar link:", err);
+      setStatusMsg("Falha ao salvar o link. Tente novamente.");
+    } finally {
+      setSalvandoLink(false);
+    }
+  };
 
   const exportarCSV = () => {
     if (filtrados.length === 0) return;
@@ -225,6 +292,7 @@ export default function Reports() {
             </button>
           </div>
         </div>
+        {statusMsg && <p className="status">{statusMsg}</p>}
 
         <div className="card ghost stack" style={{ marginBottom: 12 }}>
           <p className="note">Ative/desative as colunas que deseja ver/exportar.</p>
@@ -340,22 +408,55 @@ export default function Reports() {
             </thead>
 
             <tbody>
-              {filtrados.map((item, i) => (
-                <tr key={i}>
-                  {cols.DATA && <td>{formatDateBR(item.DATA)}</td>}
-                  {cols.MODELO && <td>{item.MODELO || item.NOME}</td>}
-                  {cols.LOJA && (
-                    <>
-                      <td>{siteFrom(item)}</td>
-                      <td>{item.ENTREGUE_POR || ""}</td>
-                    </>
-                  )}
-                  {cols.PIX && <td className="price">{normMoney(item.PIX)}</td>}
-                  {cols.CREDITO && (
-                    <td className="price">{normMoney(item.CARTAO_DE_CREDITO || item.CREDITO || item.PARCELADO)}</td>
-                  )}
-                </tr>
-              ))}
+              {filtrados.map((item, i) => {
+                const erro = isErroBusca(item);
+                const editando = editingIndex === i;
+                const nomeMostrar = erro ? item.NOME || item.MODELO : item.MODELO || item.NOME;
+                const creditoValor = normMoney(item.CARTAO_DE_CREDITO || item.CREDITO || item.PARCELADO);
+                return (
+                  <tr key={i}>
+                    {cols.DATA && <td>{formatDateBR(item.DATA)}</td>}
+                    {cols.MODELO && <td>{nomeMostrar}</td>}
+                    {cols.LOJA && (
+                      <>
+                        <td>{siteFrom(item)}</td>
+                        <td>{item.ENTREGUE_POR || ""}</td>
+                      </>
+                    )}
+                    {cols.PIX && <td className="price">{erro ? "Erro" : normMoney(item.PIX)}</td>}
+                    {cols.CREDITO && (
+                      <td className="price">
+                        {editando ? (
+                          <div className="stack" style={{ gap: 6 }}>
+                            <input
+                              value={draftLink}
+                              onChange={(e) => setDraftLink(e.target.value)}
+                              placeholder="Cole o novo link do produto"
+                            />
+                            <div className="row" style={{ gap: 6 }}>
+                              <button className="btn primary" onClick={() => salvarLink(item)} disabled={salvandoLink}>
+                                Salvar
+                              </button>
+                              <button className="btn ghost" onClick={cancelarEdicao} disabled={salvandoLink}>
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        ) : erro ? (
+                          <div className="row" style={{ justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                            <span>Erro</span>
+                            <button className="btn secondary" onClick={() => abrirEdicao(i, item)}>
+                              Editar link
+                            </button>
+                          </div>
+                        ) : (
+                          creditoValor
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
               {filtrados.length === 0 && (
                 <tr>
                   <td
