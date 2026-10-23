@@ -9,6 +9,7 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 
+from .agendamento import filtros_da_agenda
 from .core.coleta import executar_coleta
 from .core.trava import ColetaEmAndamento
 from .db.migracao_csv import sincronizar_links_csv
@@ -39,8 +40,13 @@ def main(argv: list[str] | None = None) -> int:
     fabrica = iniciar_banco(criar_engine())
     sincronizar_links_csv(fabrica)
 
+    lojas, incluir, excluir = args.loja, args.incluir, args.excluir
+    if args.origem == "agendada" and not (lojas or incluir or excluir):
+        # A tarefa do Windows roda sem argumentos: os filtros vêm do config.json editado na tela Home.
+        lojas, incluir, excluir = filtros_da_agenda()
+
     try:
-        resumo = executar_coleta(fabrica, args.origem, args.loja, args.incluir, args.excluir)
+        resumo = executar_coleta(fabrica, args.origem, lojas, incluir, excluir)
     except ColetaEmAndamento as exc:
         print(json.dumps({"erro": str(exc), "em_andamento": True}))
         return 2

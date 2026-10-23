@@ -45,6 +45,21 @@ Cada produto recebe um status (`OK`, `LINK_QUEBRADO`, `PRODUTO_DIVERGENTE`, `PRE
 
 Se a loja bloquear o acesso automatizado (por exemplo, "Erro 403"), a coleta registra `BLOQUEIO` e segue em frente, sem tentar contornar.
 
+## Agendamento (Windows)
+
+A coleta diária roda pelo Agendador de Tarefas do Windows e não depende do servidor web aberto. Pela tela Home (aba de modo automático) ou pelo script:
+
+```powershell
+.\scripts\instalar_agendamento.ps1                       # todos os dias às 12:00
+.\scripts\instalar_agendamento.ps1 -Horas 09:00,18:30 -Dias Mon,Tue,Wed,Thu,Fri
+.\scripts\instalar_agendamento.ps1 -AcordarPC            # acorda o computador no horário
+.\scripts\instalar_agendamento.ps1 -Desativar            # ou -Remover, ou -SomenteMostrar
+```
+
+- Se o computador estiver desligado ou dormindo no horário, a tarefa roda assim que possível depois.
+- A tarefa roda com o seu usuário, com a sessão aberta (o Chrome abre visível). Os filtros de loja e modelo do modo automático ficam em `backend/config.json`.
+- A tela Home mostra se a tarefa está instalada, a próxima execução e o resultado da última.
+
 ## Testes
 
 ```bash

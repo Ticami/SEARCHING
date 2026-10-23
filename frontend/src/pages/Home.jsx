@@ -16,6 +16,20 @@ export default function Home() {
   const [autoStores, setAutoStores] = useState({ magalu: true, amazon: false, casasbahia: false });
   const [autoSelecionados, setAutoSelecionados] = useState([]);
   const [timeDraft, setTimeDraft] = useState(""); // "HH:MM"
+  const [agenda, setAgenda] = useState(null); // { tarefa, ultima_execucao, comando }
+
+  const fmtData = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime())
+      ? "—"
+      : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  };
+
+  const fmtDuracao = (s) => {
+    if (s == null) return "";
+    return s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`;
+  };
 
   // =========================
   // Carrega modelos do backend
@@ -56,6 +70,7 @@ export default function Home() {
         const r = await fetch("/api/schedule");
         const j = await r.json();
         const cfg = j?.config || {};
+        setAgenda(j);
         setAutoEnabled(!!cfg.enabled);
         setAutoTimes(Array.isArray(cfg.times) ? cfg.times : []);
         setAutoDays(Array.isArray(cfg.days) ? cfg.days : ["mon", "tue", "wed", "thu", "fri"]);
@@ -148,6 +163,7 @@ export default function Home() {
         body: JSON.stringify(body),
       });
       const j = await r.json();
+      if (j.tarefa) setAgenda(j);
       setStatus(j.message || "Agendamento salvo!");
     } catch (e) {
       setStatus("Erro ao salvar agendamento");
@@ -260,6 +276,45 @@ export default function Home() {
         </div>
 
         <div className="stack">
+          {agenda && (
+            <div className="card ghost grid-2">
+              <div className="stack">
+                <strong>Tarefa do Windows</strong>
+                <span>
+                  {agenda.tarefa?.instalada
+                    ? agenda.tarefa.ativa
+                      ? "Instalada e ativa"
+                      : "Instalada, mas desativada"
+                    : "Ainda não instalada"}
+                </span>
+                <span className="muted">
+                  Próxima execução: {agenda.tarefa?.ativa ? fmtData(agenda.tarefa.proxima_execucao) : "—"}
+                </span>
+              </div>
+              <div className="stack">
+                <strong>Última execução</strong>
+                {agenda.ultima_execucao ? (
+                  <>
+                    <span>
+                      {fmtData(agenda.ultima_execucao.iniciada_em)}
+                      {agenda.ultima_execucao.em_andamento
+                        ? " (em andamento)"
+                        : agenda.ultima_execucao.duracao_s != null
+                        ? ` · ${fmtDuracao(agenda.ultima_execucao.duracao_s)}`
+                        : ""}
+                    </span>
+                    <span className="muted">
+                      {agenda.ultima_execucao.ok} de {agenda.ultima_execucao.total} com sucesso ·{" "}
+                      {agenda.ultima_execucao.falhas} com falha · origem: {agenda.ultima_execucao.origem}
+                    </span>
+                  </>
+                ) : (
+                  <span className="muted">Nenhuma execução registrada</span>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="toolbar">
             <span className="muted" style={{ fontSize: 13 }}>
               Lojas (automático)
@@ -369,7 +424,11 @@ export default function Home() {
           </div>
 
           <div className="section-heading">
-            <div className="note">O backend executará a coleta automaticamente nos horários/dias definidos.</div>
+            <div className="note">
+              Ao salvar, a tarefa é criada no Agendador de Tarefas do Windows e roda mesmo com o sistema fechado. O
+              computador precisa estar ligado e com o usuário logado; se estiver desligado no horário, a coleta roda
+              assim que possível.
+            </div>
             <button className="btn primary" onClick={salvarAgendamento}>
               Salvar agendamento
             </button>
