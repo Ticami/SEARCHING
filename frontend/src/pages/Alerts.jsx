@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useAuth } from "../auth.jsx";
 
 const BASES_PRECO = { pix: "PIX", cartao_1x: "Cartão 1x" };
 const BASES_COMPARACAO = {
@@ -21,6 +22,7 @@ async function chamar(url, metodo, corpo) {
 }
 
 export default function Alerts() {
+  const { pode } = useAuth();
   const [dados, setDados] = useState(null);
   const [regras, setRegras] = useState([]);
   const [cfg, setCfg] = useState({});
@@ -85,7 +87,7 @@ export default function Alerts() {
             <p>Receba um e-mail, com o print da página, quando o preço cair.</p>
           </div>
           <div className="toolbar">
-            <button className="btn primary" onClick={testarEmail} disabled={testando || !smtp?.configurado}>
+            <button className="btn primary" onClick={testarEmail} disabled={testando || !smtp?.configurado || !pode("admin")}>
               {testando ? "Enviando..." : "Enviar e-mail de teste"}
             </button>
           </div>
@@ -178,7 +180,7 @@ export default function Alerts() {
         </div>
 
         <div className="toolbar">
-          <button className="btn primary" onClick={salvarConfig}>
+          <button className="btn primary" onClick={salvarConfig} disabled={!pode("admin")}>
             Salvar padrão
           </button>
         </div>
@@ -235,7 +237,7 @@ export default function Alerts() {
                     />
                   </td>
                   <td>
-                    <button className="btn secondary" onClick={() => salvarRegra(r)}>
+                    <button className="btn secondary" onClick={() => salvarRegra(r)} disabled={!pode("coletor")}>
                       Salvar
                     </button>
                   </td>

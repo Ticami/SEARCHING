@@ -32,6 +32,7 @@ CONFIG_PADRAO = {
     "alerta_dias_janela": "30",
     "resumo_diario_email": "0",
     "navegador_headless": "0",
+    "limite_loja_hora": "120",  # aberturas de página por loja, somando todos os usuários (modo hospedado)
 }
 
 

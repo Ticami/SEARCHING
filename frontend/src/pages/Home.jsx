@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../auth.jsx";
 
 // ---------- conteúdo explicativo ----------
 const PASSOS = [
@@ -107,6 +108,7 @@ function proximasAcoes(saude, totalProdutos) {
 }
 
 export default function Home() {
+  const { pode, modo } = useAuth();
   const [saude, setSaude] = useState(null);
   const [links, setLinks] = useState([]);
   // coleta automática
@@ -323,7 +325,8 @@ export default function Home() {
           </div>
         )}
         <div className="toolbar">
-          <button className="btn primary" onClick={coletar} disabled={rodando || lojasSel.length === 0}>
+          <button className="btn primary" onClick={coletar} disabled={rodando || lojasSel.length === 0 || modo === "hospedado" || !pode("admin")}
+            title={modo === "hospedado" ? "No modo hospedado a coleta é feita pela extensão (Coleta assistida)." : undefined}>
             {rodando ? "Coletando…" : "Iniciar coleta automática"}
           </button>
         </div>

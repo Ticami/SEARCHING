@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { useAuth } from "../auth.jsx";
 
 export default function Links() {
+  const { pode } = useAuth();
   const [links, setLinks] = useState([]);
   const [novoNome, setNovoNome] = useState("");
   const [novoLink, setNovoLink] = useState("");
@@ -95,7 +97,7 @@ export default function Links() {
                 </option>
               ))}
             </select>
-            <button className="btn primary" onClick={adicionar}>
+            <button className="btn primary" onClick={adicionar} disabled={!pode("admin")}>
               Adicionar
             </button>
           </div>
@@ -136,6 +138,8 @@ export default function Links() {
 }
 
 function RowLink({ row, onChanged }) {
+  const { pode, atribuidos } = useAuth();
+  const meu = pode("admin") || (atribuidos || []).includes(row.ID) || atribuidos === null;
   const [edit, setEdit] = React.useState(false);
   const [draft, setDraft] = React.useState({
     nome: row["NOME COMERCIAL"],
@@ -216,10 +220,10 @@ function RowLink({ row, onChanged }) {
           </>
         ) : (
           <>
-            <button className="btn secondary" onClick={() => setEdit(true)}>
+            <button className="btn secondary" onClick={() => setEdit(true)} disabled={!pode("coletor") || !meu}>
               Editar
             </button>
-            <button className="btn ghost" style={{ marginLeft: 6 }} onClick={remover}>
+            <button className="btn ghost" style={{ marginLeft: 6 }} onClick={remover} disabled={!pode("admin")}>
               Remover
             </button>
           </>

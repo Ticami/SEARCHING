@@ -12,6 +12,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 
 from .core.coleta import executar_coleta
+from .modo import exigir_local
 from .core.trava import ColetaEmAndamento
 from .db.migracao_csv import importar_se_vazio
 from .db.session import BACKEND_DIR, criar_engine, iniciar_banco
@@ -36,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--excluir", action="append", default=[], help="exceto estes modelos (repetível)")
     ap.add_argument("--log-nivel", default="INFO")
     args = ap.parse_args(argv)
+    exigir_local("A coleta automática")
 
     _configurar_log(args.log_nivel)
     fabrica = iniciar_banco(criar_engine())

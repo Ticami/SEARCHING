@@ -9,7 +9,7 @@ import hmac
 import json
 import os
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import select
@@ -23,7 +23,7 @@ from .core.lojas import modelo_simples
 from .core.precos import formatar_brl, parse_preco_centavos
 from .core.status import StatusColeta
 from .core.validacao import Leitura, classificar
-from .db.models import Alerta, Coleta, Configuracao, Execucao, Produto, RevisaoLink
+from .db.models import AberturaPagina, Alerta, Coleta, Configuracao, Execucao, Produto, RevisaoLink, Usuario
 from .db.session import BACKEND_DIR, PRINTS_DIR
 
 TOKEN_PATH = Path(os.environ.get("SEARCHING_TOKEN") or BACKEND_DIR / "data" / "assistida.token")
@@ -33,7 +33,19 @@ _PNG = b"\x89PNG\r\n\x1a\n"
 
 
 class SessaoInvalida(ValueError):
-    pass
+    status = 400
+
+
+class LimiteExcedido(SessaoInvalida):
+    """Abertura de página negada pelo servidor: intervalo mínimo, limite da loja ou produto em coleta por outra pessoa."""
+
+    def __init__(self, mensagem: str, status: int = 429, aguardar_ms: int = 0):
+        super().__init__(mensagem)
+        self.status, self.aguardar_ms = status, aguardar_ms
+
+
+INTERVALO_MINIMO_S = 3
+SESSAO_ABANDONADA_H = 12  # sessão aberta há mais que isso não trava mais os produtos para os outros
 
 
 # ---------- token da extensão ----------
@@ -53,18 +65,48 @@ def token_valido(recebido: str | None, caminho: Path | None = None) -> bool:
 
 
 # ---------- estado da sessão (uma por vez, guardada em configuracoes) ----------
-def _ler(s: Session) -> dict | None:
-    c = s.get(Configuracao, CHAVE_SESSAO)
+def _chave(usuario_id: int | None) -> str:
+    """Modo local: uma sessão única (chave antiga). Modo hospedado: uma sessão por usuário."""
+    return CHAVE_SESSAO if usuario_id is None else f"{CHAVE_SESSAO}:{usuario_id}"
+
+
+def _ler(s: Session, usuario_id: int | None = None) -> dict | None:
+    c = s.get(Configuracao, _chave(usuario_id))
     return json.loads(c.valor) if c and c.valor else None
 
 
-def _gravar(s: Session, dados: dict | None) -> None:
+def _gravar(s: Session, dados: dict | None, usuario_id: int | None = None) -> None:
     if dados is None:
-        c = s.get(Configuracao, CHAVE_SESSAO)
+        c = s.get(Configuracao, _chave(usuario_id))
         if c:
             s.delete(c)
     else:
-        s.merge(Configuracao(chave=CHAVE_SESSAO, valor=json.dumps(dados)))
+        s.merge(Configuracao(chave=_chave(usuario_id), valor=json.dumps(dados)))
+
+
+def em_coleta(s: Session, agora: datetime | None = None, exceto_usuario_id: int | None = None) -> dict[int, dict]:
+    """Produtos pendentes na fila de uma sessão ativa de alguém: {produto_id: {usuario_id, usuario, desde}}."""
+    agora = agora or datetime.now()
+    achados: dict[int, dict] = {}
+    for c in s.scalars(select(Configuracao).where(Configuracao.chave.like(f"{CHAVE_SESSAO}:%"))):
+        uid = int(c.chave.split(":", 1)[1])
+        if uid == exceto_usuario_id:
+            continue
+        dados = json.loads(c.valor)
+        execucao = s.get(Execucao, dados["execucao_id"])
+        if execucao is None or agora - execucao.iniciada_em > timedelta(hours=SESSAO_ABANDONADA_H):
+            continue
+        u = s.get(Usuario, uid)
+        for pid in dados["produtos"]:
+            if pid in dados["pulados"]:
+                continue
+            feito = s.scalar(select(Coleta.id).where(Coleta.execucao_id == execucao.id, Coleta.produto_id == pid).limit(1))
+            if not feito:
+                achados[pid] = {
+                    "usuario_id": uid, "usuario": (u.nome or u.email) if u else str(uid),
+                    "desde": execucao.iniciada_em.isoformat(timespec="seconds"),
+                }
+    return achados
 
 
 def _print_url(caminho: str | None) -> str | None:
@@ -102,9 +144,9 @@ def _json_coleta(s: Session, c: Coleta) -> dict:
     }
 
 
-def sessao(s: Session) -> dict:
+def sessao(s: Session, usuario_id: int | None = None) -> dict:
     """Fila da sessão aberta, reconstruída do banco (sobrevive a recarregar a página)."""
-    dados = _ler(s)
+    dados = _ler(s, usuario_id)
     if not dados:
         return {"ativa": False}
     execucao = s.get(Execucao, dados["execucao_id"])
@@ -128,23 +170,40 @@ def sessao(s: Session) -> dict:
     }
 
 
-def iniciar(s: Session, stores=None, include=None, exclude=None, adaptador_de=adaptador_para, agora: datetime | None = None) -> dict:
-    anterior = _ler(s)
+def iniciar(
+    s: Session, stores=None, include=None, exclude=None, adaptador_de=adaptador_para, agora: datetime | None = None,
+    usuario_id: int | None = None, permitidos: set[int] | None = None,
+) -> dict:
+    """Abre a fila. `permitidos` (modo hospedado) limita aos produtos atribuídos ao coletor; produtos que outra
+    pessoa está coletando agora ficam de fora e voltam em `em_coleta_por_outros`."""
+    anterior = _ler(s, usuario_id)
     if anterior:
-        encerrar(s, anterior["execucao_id"], notificador=None)
-    produtos = [p for p in _selecionar(s, stores, include, exclude) if adaptador_de(p.url_atual) is not None]
+        encerrar(s, anterior["execucao_id"], notificador=None, usuario_id=usuario_id)
+    candidatos = [p for p in _selecionar(s, stores, include, exclude) if adaptador_de(p.url_atual) is not None]
+    if permitidos is not None:
+        candidatos = [p for p in candidatos if p.id in permitidos]
+        if not candidatos:
+            raise SessaoInvalida("Nenhum produto atribuído a você para coletar. Peça a um administrador.")
+    ocupados = em_coleta(s, agora, exceto_usuario_id=usuario_id) if usuario_id is not None else {}
+    produtos = [p for p in candidatos if p.id not in ocupados]
     if not produtos:
+        if candidatos:
+            raise SessaoInvalida("Todos esses produtos já estão em coleta por outra pessoa.")
         raise SessaoInvalida("Nenhum produto ativo de uma loja com suporte para coletar.")
-    execucao = Execucao(iniciada_em=agora or datetime.now(), origem="assistida", total=len(produtos))
+    execucao = Execucao(iniciada_em=agora or datetime.now(), origem="assistida", total=len(produtos), usuario_id=usuario_id)
     s.add(execucao)
     s.flush()
-    _gravar(s, {"execucao_id": execucao.id, "produtos": [p.id for p in produtos], "pulados": []})
+    _gravar(s, {"execucao_id": execucao.id, "produtos": [p.id for p in produtos], "pulados": []}, usuario_id)
     s.commit()
-    return sessao(s)
+    resposta = sessao(s, usuario_id)
+    resposta["em_coleta_por_outros"] = [
+        {"produto_id": p.id, "produto": p.nome_comercial, "por": ocupados[p.id]["usuario"]} for p in candidatos if p.id in ocupados
+    ]
+    return resposta
 
 
-def _validar(s: Session, execucao_id: int, produto_id: int) -> tuple[dict, Produto]:
-    dados = _ler(s)
+def _validar(s: Session, execucao_id: int, produto_id: int, usuario_id: int | None = None) -> tuple[dict, Produto]:
+    dados = _ler(s, usuario_id)
     if not dados or dados["execucao_id"] != execucao_id:
         raise SessaoInvalida("Sessão de coleta assistida não está aberta (inicie de novo).")
     if produto_id not in dados["produtos"]:
@@ -177,10 +236,10 @@ def salvar_print(data_url: str | None, produto: Produto, quando: datetime, print
 def registrar_captura(
     s: Session, execucao_id: int, produto_id: int, dados_captura: dict,
     notificador: Notificador | None = None, prints_dir: Path = PRINTS_DIR, agora: datetime | None = None,
-    adaptador_de=adaptador_para,
+    adaptador_de=adaptador_para, usuario_id: int | None = None,
 ) -> dict:
     """Recebe o que a extensão leu (HTML da página, HTML com o menu de pagamento aberto e o print) e grava a coleta."""
-    _, produto = _validar(s, execucao_id, produto_id)
+    _, produto = _validar(s, execucao_id, produto_id, usuario_id)
     html, url_final = dados_captura.get("html"), dados_captura.get("url_final") or produto.url_atual
     if not isinstance(html, str) or not html.strip():
         raise SessaoInvalida("A captura não trouxe o HTML da página.")
@@ -200,37 +259,81 @@ def registrar_captura(
     cfg = _config(s)
     status, detalhe = _status_final(s, produto, resultado, cfg)
     coleta = _salvar_coleta(s, execucao_id, produto, resultado, status, detalhe)
+    if usuario_id is not None:
+        coleta.coletado_por_id = usuario_id
+        s.commit()
     if status == StatusColeta.OK:
         alertas.processar_coleta(s, produto, coleta, cfg, notificador or Notificador())
     return _json_coleta(s, coleta)
 
 
-def registrar_link_quebrado(s: Session, execucao_id: int, produto_id: int) -> dict:
+def registrar_link_quebrado(s: Session, execucao_id: int, produto_id: int, usuario_id: int | None = None) -> dict:
     """O usuário viu que o link não leva ao produto: registra a falha e põe o produto na fila de revisão."""
-    _, produto = _validar(s, execucao_id, produto_id)
+    _, produto = _validar(s, execucao_id, produto_id, usuario_id)
     resultado = Resultado(StatusColeta.LINK_QUEBRADO, "marcado como quebrado pelo usuário na coleta assistida")
     coleta = _salvar_coleta(s, execucao_id, produto, resultado, resultado.status, resultado.detalhe)
+    if usuario_id is not None:
+        coleta.coletado_por_id = usuario_id
     if not s.scalar(select(RevisaoLink.id).where(RevisaoLink.produto_id == produto.id, RevisaoLink.estado == "pendente")):
         s.add(RevisaoLink(produto_id=produto.id, execucao_id=execucao_id, motivo=StatusColeta.LINK_QUEBRADO.value, candidatos=[]))
         s.commit()
     return _json_coleta(s, coleta)
 
 
-def pular(s: Session, execucao_id: int, produto_id: int) -> dict:
-    dados, _ = _validar(s, execucao_id, produto_id)
+def pular(s: Session, execucao_id: int, produto_id: int, usuario_id: int | None = None) -> dict:
+    dados, _ = _validar(s, execucao_id, produto_id, usuario_id)
     if produto_id not in dados["pulados"]:
         dados["pulados"].append(produto_id)
-        _gravar(s, dados)
+        _gravar(s, dados, usuario_id)
         s.commit()
-    return sessao(s)
+    return sessao(s, usuario_id)
 
 
-def encerrar(s: Session, execucao_id: int, notificador: Notificador | None = None, agora: datetime | None = None) -> dict:
+def autorizar_abertura(
+    s: Session, execucao_id: int, produto_id: int, usuario_id: int | None = None, agora: datetime | None = None,
+) -> dict:
+    """A extensão pergunta antes de abrir cada página. O servidor impõe o intervalo mínimo por pessoa, o limite
+    global por loja e a regra de uma pessoa por produto, e registra a abertura."""
+    from .auth.servico import auditar
+
+    agora = agora or datetime.now()
+    _, produto = _validar(s, execucao_id, produto_id, usuario_id)
+    if usuario_id is not None and produto_id in em_coleta(s, agora, exceto_usuario_id=usuario_id):
+        raise LimiteExcedido("Este produto está em coleta por outra pessoa.", 409)
+    consulta = select(AberturaPagina.em).order_by(AberturaPagina.em.desc()).limit(1)
+    if usuario_id is not None:
+        consulta = consulta.where(AberturaPagina.usuario_id == usuario_id)
+    ultima = s.scalar(consulta)
+    if ultima is not None:
+        falta = INTERVALO_MINIMO_S - (agora - ultima).total_seconds()
+        if falta > 0:
+            raise LimiteExcedido("Aguarde: uma página a cada 3 segundos.", 429, int(falta * 1000) + 1)
+    limite = int(_config(s).get("limite_loja_hora", "120"))
+    na_hora = len(s.scalars(
+        select(AberturaPagina.id).where(AberturaPagina.loja == produto.loja, AberturaPagina.em >= agora - timedelta(hours=1))
+    ).all())
+    if na_hora >= limite:
+        auditar(s, "limite_loja", alvo=produto.loja, detalhe={"aberturas_na_ultima_hora": na_hora, "limite": limite}, agora=agora)
+        s.commit()
+        raise LimiteExcedido(
+            f"Limite de {limite} páginas por hora em {produto.loja} atingido (somando todos os usuários). Tente mais tarde.", 429
+        )
+    s.add(AberturaPagina(em=agora, usuario_id=usuario_id, produto_id=produto_id, loja=produto.loja))
+    s.commit()
+    return {"ok": True}
+
+
+def encerrar(
+    s: Session, execucao_id: int, notificador: Notificador | None = None, agora: datetime | None = None,
+    usuario_id: int | None = None,
+) -> dict:
     """Fecha a execução com os totais (uma coleta final por produto) e, se ligado, envia o resumo por e-mail."""
     execucao = s.get(Execucao, execucao_id)
     if execucao is None:
         raise SessaoInvalida("Execução não encontrada.")
-    dados = _ler(s)
+    if execucao.usuario_id != usuario_id:
+        raise SessaoInvalida("Esta execução pertence a outra pessoa.")
+    dados = _ler(s, usuario_id)
     ids = dados["produtos"] if dados and dados["execucao_id"] == execucao_id else []
     por_status: dict[str, int] = {}
     for pid in ids:
@@ -252,7 +355,7 @@ def encerrar(s: Session, execucao_id: int, notificador: Notificador | None = Non
         "por_status": por_status, "pulados": len(dados["pulados"]) if dados and dados["execucao_id"] == execucao_id else 0,
     }
     if dados and dados["execucao_id"] == execucao_id:
-        _gravar(s, None)
+        _gravar(s, None, usuario_id)
     s.commit()
     if notificador is not None and _config(s)["resumo_diario_email"] == "1" and resumo["coletados"] > 0:
         alertas.enviar_resumo({**resumo, "total": resumo["coletados"]}, notificador)

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useAuth } from "../auth.jsx";
 
 const MOTIVOS = {
   LINK_QUEBRADO: "Link quebrado",
@@ -10,6 +11,7 @@ const fmtData = (iso) =>
   iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
 
 export default function Review() {
+  const { pode } = useAuth();
   const [itens, setItens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -86,7 +88,7 @@ export default function Review() {
                 {r.ultima_coleta?.erro_detalhe ? ` · ${r.ultima_coleta.erro_detalhe}` : ""}
               </p>
             </div>
-            <button className="btn ghost" onClick={() => window.confirm("Desativar este produto?") && resolver(r.id, "desativar")}>
+            <button className="btn ghost" disabled={!pode("coletor")} onClick={() => window.confirm("Desativar este produto?") && resolver(r.id, "desativar")}>
               Desativar produto
             </button>
           </div>
@@ -120,7 +122,7 @@ export default function Review() {
                   <div className="toolbar">
                     <span className="chip chip-active">Confiança {Math.round(c.nota * 100)}%</span>
                     {c.verificado && <span className="chip">Página confirmada</span>}
-                    <button className="btn primary" onClick={() => resolver(r.id, "aprovar", c.url)}>
+                    <button className="btn primary" disabled={!pode("coletor")} onClick={() => resolver(r.id, "aprovar", c.url)}>
                       Aprovar este
                     </button>
                   </div>

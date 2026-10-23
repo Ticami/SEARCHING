@@ -3,6 +3,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
+from ..modo import exigir_local
+
 
 class Navegador:
     """Dono do ChromeDriver; recria a sessão se ela cair no meio da coleta.
@@ -15,6 +17,7 @@ class Navegador:
         self.driver = None
 
     def _criar(self):
+        exigir_local("O navegador do coletor automático")  # servidor hospedado nunca abre lojas
         opcoes = Options()
         if self.headless:
             opcoes.add_argument("--headless=new")

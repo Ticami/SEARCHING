@@ -8,13 +8,16 @@ import Curves from "./pages/Curves"; // nova rota
 import Review from "./pages/Review";
 import Alerts from "./pages/Alerts";
 import Assisted from "./pages/Assisted";
+import { Conta, Login, Usuarios, useAuth } from "./auth.jsx";
 import "./styles/global.css";
 
 export default function App() {
+  const { carregando, usuario, modo, pode, sair } = useAuth();
   const [pendentes, setPendentes] = useState(0);
 
   // Contador de links aguardando revisão, mostrado no menu.
   useEffect(() => {
+    if (!usuario) return undefined;
     const contar = () =>
       fetch("/api/revisoes")
         .then((r) => r.json())
@@ -27,7 +30,7 @@ export default function App() {
       clearInterval(t);
       window.removeEventListener("revisoes-changed", contar);
     };
-  }, []);
+  }, [usuario]);
 
   useEffect(() => {
     // remove a chave da antiga tela de senha, se existir no navegador
@@ -35,6 +38,9 @@ export default function App() {
       localStorage.removeItem("searching_auth");
     } catch {}
   }, []);
+
+  if (carregando) return null;
+  if (!usuario) return <Login />;
 
   return (
     <Router>
@@ -82,12 +88,14 @@ export default function App() {
               Links
             </NavLink>
 
-            <NavLink
-              to="/assisted"
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
-              Coleta assistida
-            </NavLink>
+            {pode("coletor") && (
+              <NavLink
+                to="/assisted"
+                className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+              >
+                Coleta assistida
+              </NavLink>
+            )}
 
             <NavLink
               to="/alerts"
@@ -102,6 +110,20 @@ export default function App() {
             >
               Revisão{pendentes > 0 ? ` (${pendentes})` : ""}
             </NavLink>
+
+            {modo === "hospedado" && (
+              <NavLink to="/conta" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+                Minha conta
+              </NavLink>
+            )}
+            {modo === "hospedado" && pode("admin") && (
+              <NavLink to="/usuarios" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+                Usuários
+              </NavLink>
+            )}
+            {modo === "hospedado" && (
+              <button className="btn ghost" onClick={sair}>Sair ({usuario.papel})</button>
+            )}
           </nav>
 
           <footer>by Mateus Ticami</footer>
@@ -116,7 +138,9 @@ export default function App() {
             <Route path="/links" element={<Links />} />
             <Route path="/review" element={<Review />} />
             <Route path="/alerts" element={<Alerts />} />
-            <Route path="/assisted" element={<Assisted />} />
+            <Route path="/assisted" element={pode("coletor") ? <Assisted /> : <Home />} />
+            <Route path="/conta" element={<Conta />} />
+            <Route path="/usuarios" element={pode("admin") ? <Usuarios /> : <Home />} />
           </Routes>
         </main>
       </div>

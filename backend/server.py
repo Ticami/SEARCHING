@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_file, send_from_directory
+from flask import Flask, g, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 import os
 import json
@@ -10,7 +10,9 @@ from io import BytesIO
 
 from sqlalchemy import select
 
-from searching import assistida, relatorios, seguranca
+from searching import assistida, modo, relatorios, seguranca
+from searching import web_conta
+from searching.auth import guarda
 from searching.alerts import config as alertas_config
 from searching.alerts import email as alertas_email
 from searching.alerts import regras as alertas_regras
@@ -37,6 +39,7 @@ def rodar_coleta_cli(origem, stores=None, include=None, exclude=None):
 
     Devolve (codigo_de_saida, resumo_dict). Código 2 = já existe uma coleta em andamento.
     """
+    modo.exigir_local("A coleta automática")  # o servidor hospedado nunca abre lojas
     cmd = [sys.executable, "-m", "searching.run", "--origem", origem]
     for flag, valores in (("--loja", stores), ("--incluir", include), ("--excluir", exclude)):
         for v in valores or []:
@@ -58,19 +61,46 @@ for _fluxo in (sys.stdout, sys.stderr):
 CONFIG_SERVIDOR = seguranca.configuracao_servidor()
 ORIGENS = seguranca.origens_permitidas(porta=CONFIG_SERVIDOR.porta)
 
-app = Flask(__name__)
-CORS(app, origins=sorted(ORIGENS))  # só o frontend local; nada de "*"
+HOSPEDADO = modo.hospedado()
+FRONTEND_DIST = os.path.join(os.path.dirname(BASE_DIR), "frontend", "dist")
+
+app = Flask(__name__, static_folder=None)
+CORS(app, origins=sorted(ORIGENS), supports_credentials=HOSPEDADO)  # só o nosso frontend; nada de "*"
 app.config["MAX_CONTENT_LENGTH"] = 40 * 1024 * 1024  # a captura traz o HTML da página e o print
+app.config["DB_FABRICA"] = db_fabrica
+app.config["ORIGENS"] = ORIGENS
+app.config["NOTIFICADOR"] = alertas_servico.Notificador()
+if HOSPEDADO and os.environ.get("SEARCHING_PROXIES"):  # atrás de um proxy reverso confiável (nginx, Caddy, nuvem)
+    from werkzeug.middleware.proxy_fix import ProxyFix
 
+    n = int(os.environ["SEARCHING_PROXIES"])
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=n, x_proto=n, x_host=n)
 
+# Rotas de TODA a API passam pela guarda de autorização (deny by default). Registrada ANTES do filtro de Host/Origin,
+# mas a ordem de execução abaixo é: Host/Origin -> política.
 @app.before_request
 def proteger_servidor_local():
     """Recusa Host de fora (DNS rebinding) e escritas vindas de sites que não são o nosso frontend (CSRF)."""
-    # A extensão do Chrome envia as capturas com Origin "chrome-extension://..." e prova quem é pelo token secreto.
-    da_extensao = request.path == "/api/assistida/captura" and assistida.token_valido(request.headers.get("X-Searching-Token"))
+    # A extensão envia as capturas com Origin "chrome-extension://..." e prova quem é pelo token (por usuário no
+    # modo hospedado, arquivo local no modo local). Token no cabeçalho não é credencial "ambiente": outro site não o envia.
+    if HOSPEDADO:
+        da_extensao = bool(guarda.token_da_requisicao())
+    else:
+        da_extensao = request.path in ("/api/assistida/captura", "/api/assistida/autorizar") and assistida.token_valido(
+            request.headers.get("X-Searching-Token")
+        )
     motivo = seguranca.requisicao_bloqueada(request.method, request.host, None if da_extensao else request.headers.get("Origin"), ORIGENS)
     if motivo:
         return jsonify({"error": motivo}), 403
+
+
+guarda.instalar(app)
+app.register_blueprint(web_conta.bp)
+
+
+def _uid():
+    """Id do usuário logado (None no modo local, que tem uma única sessão de coleta)."""
+    return g.usuario.id if HOSPEDADO else None
 
 # ==============================
 # Rotas: LINKS (banco de dados)
@@ -114,6 +144,9 @@ def editar_link():
             produto = _produto_do_payload(s, data)
             if produto is None:
                 return jsonify({"error": "Link não encontrado"}), 404
+            negado = guarda.exigir_dono(produto.id)
+            if negado:
+                return negado
             repo_links.atualizar(s, produto, data.get("nome"), data.get("link"), data.get("loja"))
             s.commit()
             return jsonify({"message": "Link atualizado com sucesso!"})
@@ -201,6 +234,9 @@ def resolver_revisao(revisao_id):
         r = s.get(RevisaoLink, revisao_id)
         if r is None:
             return jsonify({"error": "Revisão não encontrada"}), 404
+        negado = guarda.exigir_dono(r.produto_id)
+        if negado:
+            return negado
         try:
             repo_links.resolver_revisao(s, r, data.get("acao"), data.get("url"))
         except repo_links.LinkInvalido as e:
@@ -316,6 +352,9 @@ def salvar_regra_alerta(produto_id):
         p = s.get(Produto, produto_id)
         if p is None:
             return jsonify({"error": "Produto não encontrado"}), 404
+        negado = guarda.exigir_dono(p.id)
+        if negado:
+            return negado
         try:
             pct = data.get("alerta_pct")
             p.alerta_pct = None if pct in (None, "") else float(str(pct).replace(",", "."))
@@ -348,6 +387,8 @@ def _assistida(acao):
     try:
         with db_fabrica() as s:
             return jsonify(acao(s))
+    except assistida.LimiteExcedido as e:
+        return jsonify({"error": str(e), "aguardar_ms": e.aguardar_ms}), e.status
     except (assistida.SessaoInvalida, ValueError, TypeError) as e:
         return jsonify({"error": str(e)}), 400
 
@@ -358,38 +399,80 @@ def assistida_token():
 
 @app.route("/api/assistida/sessao", methods=["GET"])
 def assistida_sessao():
-    return _assistida(assistida.sessao)
+    return _assistida(lambda s: assistida.sessao(s, _uid()))
+
+def _produtos_do_coletor(s):
+    """Hospedado: coletor só coleta o que lhe foi atribuído (admin: tudo). Local: tudo (None)."""
+    if not HOSPEDADO or g.usuario.papel == "admin":
+        return None
+    from searching.db.models import Atribuicao
+
+    return set(s.scalars(select(Atribuicao.produto_id).where(Atribuicao.usuario_id == g.usuario.id)))
 
 @app.route("/api/assistida/iniciar", methods=["POST"])
 def assistida_iniciar():
     data = request.get_json(force=True, silent=True) or {}
-    return _assistida(lambda s: assistida.iniciar(s, data.get("stores"), data.get("include"), data.get("exclude")))
+    return _assistida(lambda s: assistida.iniciar(
+        s, data.get("stores"), data.get("include"), data.get("exclude"), usuario_id=_uid(), permitidos=_produtos_do_coletor(s)
+    ))
+
+@app.route("/api/assistida/em-coleta", methods=["GET"])
+def assistida_em_coleta():
+    """Quem está coletando o quê agora (evita duas pessoas no mesmo produto)."""
+    with db_fabrica() as s:
+        return jsonify([
+            {"produto_id": pid, "produto": s.get(Produto, pid).nome_comercial, "por": info["usuario"], "desde": info["desde"]}
+            for pid, info in assistida.em_coleta(s).items()
+        ])
 
 @app.route("/api/assistida/captura", methods=["POST"])
 def assistida_captura():
-    if not assistida.token_valido(request.headers.get("X-Searching-Token")):
-        return jsonify({"error": "Token da extensão ausente ou inválido. Abra a tela Coleta assistida para parear."}), 401
+    # a guarda já validou o token (por usuário no modo hospedado)
     d = request.get_json(force=True, silent=True) or {}
-    return _assistida(lambda s: assistida.registrar_captura(s, int(d.get("execucao_id", 0)), int(d.get("produto_id", 0)), d))
+    return _assistida(lambda s: assistida.registrar_captura(
+        s, int(d.get("execucao_id", 0)), int(d.get("produto_id", 0)), d, usuario_id=_uid(),
+        notificador=app.config["NOTIFICADOR"],
+    ))
+
+@app.route("/api/assistida/autorizar", methods=["POST"])
+def assistida_autorizar():
+    """A extensão pergunta antes de abrir cada página: o servidor impõe intervalo mínimo e limite por loja."""
+    d = request.get_json(force=True, silent=True) or {}
+    return _assistida(lambda s: assistida.autorizar_abertura(s, int(d.get("execucao_id", 0)), int(d.get("produto_id", 0)), usuario_id=_uid()))
 
 @app.route("/api/assistida/link-quebrado", methods=["POST"])
 def assistida_link_quebrado():
     d = request.get_json(force=True, silent=True) or {}
-    return _assistida(lambda s: assistida.registrar_link_quebrado(s, int(d.get("execucao_id", 0)), int(d.get("produto_id", 0))))
+    return _assistida(lambda s: assistida.registrar_link_quebrado(s, int(d.get("execucao_id", 0)), int(d.get("produto_id", 0)), usuario_id=_uid()))
 
 @app.route("/api/assistida/pular", methods=["POST"])
 def assistida_pular():
     d = request.get_json(force=True, silent=True) or {}
-    return _assistida(lambda s: assistida.pular(s, int(d.get("execucao_id", 0)), int(d.get("produto_id", 0))))
+    return _assistida(lambda s: assistida.pular(s, int(d.get("execucao_id", 0)), int(d.get("produto_id", 0)), usuario_id=_uid()))
 
 @app.route("/api/assistida/encerrar", methods=["POST"])
 def assistida_encerrar():
     d = request.get_json(force=True, silent=True) or {}
-    return _assistida(lambda s: assistida.encerrar(s, int(d.get("execucao_id", 0)), notificador=alertas_servico.Notificador()))
+    return _assistida(lambda s: assistida.encerrar(
+        s, int(d.get("execucao_id", 0)), notificador=app.config["NOTIFICADOR"], usuario_id=_uid()
+    ))
 
 @app.route("/api/health")
 def api_health():
     return jsonify({"status": "Servidor Flask rodando"})
+
+
+# O site (frontend/dist) só é servido pelo Flask no modo hospedado: mesma origem da API, cookie de sessão sem CORS.
+if HOSPEDADO:
+    @app.route("/", defaults={"caminho": ""}, endpoint="arquivos_do_site_raiz")
+    @app.route("/<path:caminho>", endpoint="arquivos_do_site")
+    def arquivos_do_site(caminho):
+        if caminho.startswith("api/"):
+            return jsonify({"error": "Rota não encontrada"}), 404
+        alvo = os.path.join(FRONTEND_DIST, caminho)
+        if caminho and os.path.isfile(alvo):
+            return send_from_directory(FRONTEND_DIST, caminho)
+        return send_from_directory(FRONTEND_DIST, "index.html")
 
 
 @app.route("/api/coletar", methods=["POST"])

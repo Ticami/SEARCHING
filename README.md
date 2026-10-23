@@ -147,6 +147,22 @@ Gera 14 dias de histórico fictício (preços, quedas, bloqueios, um link corrig
 
 O servidor sempre escuta apenas em `127.0.0.1`; `SEARCHING_HOST` com outro valor é ignorado.
 
+### Modo hospedado (várias pessoas, com login)
+
+Por padrão tudo é **local**: sem login, só `127.0.0.1`. Com `SEARCHING_MODO=hospedado` o sistema vira multiusuário
+(desenho completo em [`docs/DESENHO_MULTIUSUARIO.md`](docs/DESENHO_MULTIUSUARIO.md)):
+
+- **Contas e papéis** validados no servidor (deny by default): `admin` (tudo), `coletor` (coleta assistida e edita o que lhe foi atribuído) e `leitor` (só vê).
+- **A coleta continua no computador de cada pessoa**, pela extensão do Chrome/Edge: o servidor hospedado nunca abre lojas (a coleta automática fica bloqueada nesse modo, até para o admin).
+- Senhas com Argon2id, cookie de sessão `HttpOnly`/`Secure`/`SameSite`, CSRF, bloqueio por tentativas, recuperação de senha por e-mail, 2FA opcional e log de auditoria.
+- Primeiro administrador, sem senha padrão: `cd backend && python -m searching.usuarios criar-admin --email voce@exemplo.com`.
+
+| Variável (modo hospedado) | Efeito |
+|---|---|
+| `SEARCHING_MODO=hospedado` | Liga login, papéis e auditoria. |
+| `SEARCHING_URL_PUBLICA` | Endereço HTTPS do site (obrigatório), por exemplo `https://searching.suaempresa.com`. |
+| `SEARCHING_PROXIES=1` | Quantidade de proxies reversos confiáveis à frente (lê `X-Forwarded-*`). |
+
 ### Testes
 
 ```bash

@@ -3,7 +3,7 @@
 Arquivo de continuidade: qualquer sessão nova deve ler isto primeiro e **atualizá-lo ao terminar cada tarefa** (mover o item
 para "Feito" com o hash do commit, ajustar "Em andamento" e "Próximos passos" e incluir o arquivo no mesmo commit da tarefa).
 
-Última atualização: push feito a pedido do usuário; GitHub e master local iguais (testes: 223 passando).
+Última atualização: Fase 1 do multiusuário (contas, papéis, auditoria) pronta; push ainda não feito (testes: 254 passando).
 
 ## Resumo do projeto
 
@@ -40,12 +40,15 @@ relatórios. Dados 100% locais.
 | Limpeza (modo automático, agendamento, componentes e CSS mortos, rotas antigas) e nova tela Início explicativa | `a400004` |
 | `docs/ESTADO.md` criado | `a555ba0` |
 | Tarefa do Windows "SEARCHING - Coleta" removida a pedido do usuário (ação fora do repositório, conferida: não existe mais) | `cfe4efc` |
-| **Push** de tudo para o GitHub (branch de segurança `backup/antes-das-etapas` mantida) | este commit é o topo da master |
+| **Push** de tudo para o GitHub (branch de segurança `backup/antes-das-etapas` mantida) | `ca7b715` |
+| Multiusuário, Fase 0: `docs/DESENHO_MULTIUSUARIO.md` (extensão hospedada viável; modelo, matriz, pareamento) | `cdfcf5f` |
+| Multiusuário, Fase 1: contas, papéis deny-by-default, sessões/CSRF, bloqueio, recuperação de senha, 2FA, auditoria, CLI `searching.usuarios`, telas Login/Conta/Usuários | commit seguinte a `cdfcf5f` |
 
 ## Em andamento
 
-Nada. A limpeza e a nova tela inicial terminaram e estão em `a400004` (conferido com `git status`: só resta a edição antiga do
-`iniciar_searching.bat`, que fica de fora dos commits).
+Transformação em sistema multiusuário (tarefa em fases, ver `docs/DESENHO_MULTIUSUARIO.md`). **Fase 1 concluída**; faltam Fase 2
+(extensão em modo hospedado: URL configurável, token por usuário, `autorizar`), Fase 3 (coordenação) e Fase 4 (operação: Docker,
+PostgreSQL, backup, logs). Decisão: extensão hospedada é viável, **plano B não foi usado**. Modo local segue idêntico (sem login).
 
 ## Próximos passos (sugestões)
 
