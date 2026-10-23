@@ -1,7 +1,6 @@
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 import os
-import re
 import json
 from datetime import datetime
 
@@ -11,7 +10,7 @@ from io import BytesIO
 
 from sqlalchemy import select
 
-from searching import agendamento, assistida, relatorios, seguranca
+from searching import assistida, relatorios, seguranca
 from searching.alerts import config as alertas_config
 from searching.alerts import email as alertas_email
 from searching.alerts import regras as alertas_regras
@@ -26,18 +25,15 @@ from searching.db.session import criar_engine, iniciar_banco
 # Caminhos / init
 # ==============================
 BASE_DIR = os.path.dirname(__file__)
-DATA_DIR = os.path.join(BASE_DIR, "data")
 PRINTS_DIR = str(prints_dir_config)
-CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
-os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(PRINTS_DIR, exist_ok=True)
 
 db_fabrica = iniciar_banco(criar_engine())
 
 
 def rodar_coleta_cli(origem, stores=None, include=None, exclude=None):
-    """Executa a coleta pelo mesmo comando usado pelo agendador: python -m searching.run.
+    """Executa a coleta automática pelo mesmo comando da linha de comando: python -m searching.run.
 
     Devolve (codigo_de_saida, resumo_dict). Código 2 = já existe uma coleta em andamento.
     """
@@ -62,7 +58,7 @@ for _fluxo in (sys.stdout, sys.stderr):
 CONFIG_SERVIDOR = seguranca.configuracao_servidor()
 ORIGENS = seguranca.origens_permitidas(porta=CONFIG_SERVIDOR.porta)
 
-app = Flask(__name__, static_folder="dist", static_url_path="")
+app = Flask(__name__)
 CORS(app, origins=sorted(ORIGENS))  # só o frontend local; nada de "*"
 app.config["MAX_CONTENT_LENGTH"] = 40 * 1024 * 1024  # a captura traz o HTML da página e o print
 
@@ -213,23 +209,8 @@ def resolver_revisao(revisao_id):
         return jsonify({"message": "Revisão resolvida."})
 
 # ==============================
-# Rotas: PRINTS / HISTÓRICO (mantidas)
+# Rotas: PRINTS / HISTÓRICO
 # ==============================
-@app.route("/api/prints-list", methods=["GET"])
-def listar_pastas_prints():
-    if not os.path.exists(PRINTS_DIR):
-        return jsonify([])
-    pastas = sorted([p for p in os.listdir(PRINTS_DIR) if os.path.isdir(os.path.join(PRINTS_DIR, p))], reverse=True)
-    return jsonify(pastas)
-
-@app.route("/api/prints-list/<pasta>", methods=["GET"])
-def listar_imagens_pasta(pasta):
-    pasta_path = os.path.join(PRINTS_DIR, pasta)
-    if not os.path.exists(pasta_path):
-        return jsonify([])
-    imagens = [f for f in os.listdir(pasta_path) if f.lower().endswith((".png", ".jpg", ".jpeg"))]
-    return jsonify(imagens)
-
 @app.route("/api/prints/<pasta>/<filename>")
 def get_print(pasta, filename):
     return send_from_directory(os.path.join(PRINTS_DIR, pasta), filename)
@@ -279,39 +260,6 @@ def painel_de_saude():
     with db_fabrica() as s:
         return jsonify(relatorios.saude(s))
 
-
-# ==============================
-# Rotas: Scheduler (mantidas)
-# ==============================
-def _estado_agendamento():
-    with db_fabrica() as s:
-        ultima = agendamento.ultima_execucao(s)
-    cfg = agendamento.carregar_config()
-    return {
-        "config": cfg,
-        "tarefa": agendamento.consultar_tarefa(),
-        "ultima_execucao": ultima,
-        "comando": agendamento.comando_instalacao(cfg["times"] or ["12:00"], agendamento.normalizar_dias(cfg["days"])),
-    }
-
-@app.route("/api/schedule", methods=["GET"])
-def schedule_get():
-    return jsonify(_estado_agendamento())
-
-@app.route("/api/schedule", methods=["POST"])
-def schedule_set():
-    data = request.get_json(force=True, silent=True) or {}
-    cfg = {
-        "enabled": bool(data.get("enabled", False)),
-        "times": sorted({t for t in data.get("times", []) if agendamento.horario_valido(t)}),
-        "days": agendamento.normalizar_dias(data.get("days", [])),
-        "stores": data.get("stores") if isinstance(data.get("stores"), list) else [],
-        "include": data.get("include") if isinstance(data.get("include"), list) else [],
-        "exclude": data.get("exclude") if isinstance(data.get("exclude"), list) else [],
-    }
-    agendamento.salvar_config(cfg)
-    ok, mensagem = agendamento.aplicar(cfg)
-    return jsonify({"ok": ok, "message": mensagem, **_estado_agendamento()}), (200 if ok else 500)
 
 # ==============================
 # Rotas: ALERTAS DE PREÇO POR E-MAIL
@@ -444,19 +392,6 @@ def api_health():
     return jsonify({"status": "Servidor Flask rodando"})
 
 
-@app.route("/", defaults={"path": ""})
-@app.route("/<path:path>")
-def serve_frontend(path):
-    """
-    Servir arquivos do build do frontend (dist).
-    Qualquer rota n?o-API cai aqui e devolve index.html para o SPA.
-    """
-    dist_dir = app.static_folder
-    full_path = os.path.join(dist_dir, path)
-    if path and os.path.exists(full_path):
-        return send_from_directory(dist_dir, path)
-    return send_from_directory(dist_dir, "index.html")
-
 @app.route("/api/coletar", methods=["POST"])
 def coletar_manual():
     """
@@ -472,7 +407,7 @@ def coletar_manual():
         print("🚀 Iniciando coleta manual...")
         print(f"🛒 Filtros -> Stores: {stores}, Include: {include}, Exclude: {exclude}")
 
-        # Mesmo comando usado pelo agendamento: python -m searching.run
+        # Mesmo comando da linha de comando: python -m searching.run
         codigo, resumo = rodar_coleta_cli("manual", stores, include, exclude)
         if codigo == 2:
             return jsonify({"ok": False, "error": "Já existe uma coleta em andamento. Aguarde terminar."}), 409
@@ -502,8 +437,7 @@ def coletar_manual():
 if __name__ == "__main__":
     print("===========================================")
     print("   🚀 Servidor Flask iniciado com sucesso! ")
-    print("   📂 Lendo histórico: data/historico.csv")
-    print("   📄 Links no banco de dados (data/searching.db)")
+    print("   📄 Dados no banco local (backend/data/searching.db)")
     print("===========================================")
     if CONFIG_SERVIDOR.aviso:
         print(f"   ⚠️  {CONFIG_SERVIDOR.aviso}")

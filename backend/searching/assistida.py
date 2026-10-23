@@ -8,7 +8,6 @@ import binascii
 import hmac
 import json
 import os
-import re
 import secrets
 from datetime import datetime
 from pathlib import Path

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 
 import pytest
@@ -135,3 +135,21 @@ def test_saude_por_loja_com_uma_coleta_final_por_produto_e_execucao(s):
 def test_saude_sem_dados(s):
     r = relatorios.saude(s, agora=AGORA)
     assert r["lojas"] == [] and r["falhas_por_status"] == {} and r["alertas"] == {"enviados": 0, "falhos": 0}
+
+
+def test_ultima_execucao_e_incluida_no_painel_de_saude(s):
+    assert relatorios.ultima_execucao(s) is None and relatorios.saude(s, agora=AGORA)["ultima_execucao"] is None
+    inicio = datetime(2026, 10, 23, 12, 0, 0)
+    s.add(Execucao(iniciada_em=inicio - timedelta(days=1), finalizada_em=inicio - timedelta(days=1), origem="manual", total=1))
+    s.add(Execucao(iniciada_em=inicio, finalizada_em=inicio + timedelta(minutes=7), origem="assistida", total=12, ok=10, falhas=2,
+                   links_corrigidos=1, em_revisao=1))
+    s.add(Execucao(iniciada_em=inicio + timedelta(hours=1), origem="manual", total=3))  # ainda rodando
+    s.commit()
+    u = relatorios.saude(s, agora=AGORA)["ultima_execucao"]
+    assert (u["origem"], u["total"], u["em_andamento"], u["duracao_s"]) == ("manual", 3, True, None)
+
+    s.query(Execucao).filter(Execucao.finalizada_em.is_(None)).delete()
+    s.commit()
+    u = relatorios.ultima_execucao(s)
+    assert (u["total"], u["ok"], u["falhas"], u["duracao_s"], u["links_corrigidos"], u["em_revisao"]) == (12, 10, 2, 420, 1, 1)
+    assert u["em_andamento"] is False

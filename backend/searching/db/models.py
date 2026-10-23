@@ -53,7 +53,7 @@ class Execucao(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     iniciada_em: Mapped[datetime] = mapped_column(DateTime)
     finalizada_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    origem: Mapped[str] = mapped_column(String(20))  # agendada | manual | legado
+    origem: Mapped[str] = mapped_column(String(20))  # manual | agendada | assistida | legado
     total: Mapped[int] = mapped_column(Integer, default=0)
     ok: Mapped[int] = mapped_column(Integer, default=0)
     falhas: Mapped[int] = mapped_column(Integer, default=0)

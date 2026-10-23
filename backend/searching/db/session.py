@@ -13,7 +13,6 @@ PRINTS_DIR = Path(os.environ.get("SEARCHING_PRINTS") or BACKEND_DIR / "prints")
 
 # Valores padrão do PRD (seção 15); podem ser alterados na tabela configuracoes.
 CONFIG_PADRAO = {
-    "horario_coleta": "12:00",
     "alerta_base_preco": "pix",
     "alerta_base_comparacao": "ultimo",
     "alerta_pct_queda": "5",

@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import select
 
 from searching.db import links
-from searching.db.models import HistoricoLink, Produto, RevisaoLink
+from searching.db.models import HistoricoLink, RevisaoLink
 from searching.db.session import criar_engine, iniciar_banco
 
 

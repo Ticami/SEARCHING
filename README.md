@@ -15,7 +15,7 @@ O SEARCHING resolve a coleta e, principalmente, a **confiabilidade**:
 - cada coleta recebe um status explícito, e **nunca há `OK` sem um preço válido**;
 - links quebrados são **recuperados automaticamente**, mas só quando há certeza de que é o mesmo produto;
 - o que foge do esperado (preço 40% diferente, página de bloqueio, produto trocado) é marcado e **não gera alerta falso**;
-- a coleta roda sozinha todo dia e todo resultado, bom ou ruim, fica registrado.
+- todo resultado, bom ou ruim, fica registrado, com o print da página.
 
 ## O que ele faz
 
@@ -24,14 +24,13 @@ O SEARCHING resolve a coleta e, principalmente, a **confiabilidade**:
 | **Coleta** | Um adaptador por loja lê título, vendedor, preço PIX e preço no cartão 1x; tira o print pelo próprio navegador; faz até 2 retentativas com espera crescente e pausas entre as páginas. |
 | **Status** | `OK`, `LINK_QUEBRADO`, `PRODUTO_DIVERGENTE`, `PRECO_NAO_ENCONTRADO`, `INDISPONIVEL`, `TIMEOUT`, `BLOQUEIO`, `ERRO_INESPERADO` e `SUSPEITO`. |
 | **Recuperação de links** | Redirecionamento, caminho base do produto e busca da loja, com **nota de confiança** e regras duras para nunca trocar de variante. O que não passa vai para a fila de **Revisão**. |
-| **Agendamento** | Tarefa do Windows diária (12:00 por padrão), que roda assim que possível se o PC estava desligado. |
 | **Coleta assistida** | Para lojas que bloqueiam robôs: uma extensão do Chrome lê a página que **você** abre (um clique por produto) e envia preço PIX, cartão 1x e print ao sistema. |
 | **Alertas** | E-mail com preço anterior e atual, percentual, link e o **print anexado**. Sem repetir o mesmo preço. |
 | **Relatórios** | Histórico filtrável, curvas de preço, galeria de prints com o preço ao lado, exportação para Excel e painel de saúde. |
 
 ## Capturas de tela
 
-| Início (saúde, agenda e última execução) | Curvas de preço |
+| Início (como funciona, resumo e próximas ações) | Curvas de preço |
 |---|---|
 | ![Início](docs/home.png) | ![Curvas](docs/curvas.png) |
 
@@ -47,8 +46,9 @@ O SEARCHING resolve a coleta e, principalmente, a **confiabilidade**:
 
 ```mermaid
 flowchart TD
-    A["Agendador de Tarefas do Windows<br/>todos os dias às 12:00"] --> B["python -m searching.run"]
-    M["Botão 'Iniciar monitoramento'"] --> B
+    M["Botão 'Iniciar coleta automática'<br/>ou python -m searching.run"] --> B["Coleta automática"]
+    A["Coleta assistida (Magalu):<br/>um clique seu por produto"] --> P["Extensão do Chrome lê a página,<br/>tira o print e envia ao servidor"]
+    P --> F
     B --> C{"Já existe uma<br/>coleta rodando?"}
     C -- sim --> X["Recusa e avisa"]
     C -- não --> D["Para cada produto ativo:<br/>adaptador da loja"]
@@ -83,7 +83,7 @@ backend/server.py   API Flask (só lê/grava o banco e dispara o CLI)
 backend/tests/      mais de 200 testes (pytest), com páginas HTML salvas como fixtures
 frontend/           React + Vite
 extensao/           extensão do Chrome da coleta assistida (Manifest V3)
-scripts/            agendamento do Windows, demonstração, teste ponta a ponta e geração das imagens deste README
+scripts/            demonstração, teste ponta a ponta e geração das imagens deste README
 ```
 
 ## Instalação e uso (Windows)
@@ -94,31 +94,18 @@ Requisitos: **Python 3.11+**, **Node.js 18+** e **Google Chrome**.
 iniciar_searching.bat
 ```
 
-O script cria o ambiente virtual do backend, instala as dependências, sobe o servidor Flask e o frontend e abre http://localhost:5173. Cadastre os produtos na tela **Links**. Se você vem da versão antiga (com `links.csv` e `historico.csv`), `python -m searching.db.migracao_csv` (executado a partir de `backend/`) importa tudo, e a primeira coleta faz o mesmo quando o banco ainda está vazio. A importação é idempotente.
+A tela **Início** explica como o sistema funciona, mostra o resumo dos últimos 7 dias e sugere o que fazer agora. O script cria o ambiente virtual do backend, instala as dependências, sobe o servidor Flask e o frontend e abre http://localhost:5173. Cadastre os produtos na tela **Links**. Se você vem da versão antiga (com `links.csv` e `historico.csv`), `python -m searching.db.migracao_csv` (executado a partir de `backend/`) importa tudo, e a primeira coleta faz o mesmo quando o banco ainda está vazio. A importação é idempotente.
 
 ### Coleta pela linha de comando
 
 ```bash
 cd backend
 python -m searching.run                                     # todos os produtos ativos
-python -m searching.run --origem agendada --loja magalu     # só uma loja
+python -m searching.run --loja magalu                        # só uma loja
 python -m searching.run --incluir "Samsung Galaxy S25 256GB"
 ```
 
 O resumo sai em JSON na última linha, o log fica em `backend/logs/searching.log` (com rotação) e os prints em `backend/prints/AAAA-MM-DD/`. Só uma coleta roda por vez.
-
-### Agendamento
-
-Pela tela **Início** ou pelo script:
-
-```powershell
-.\scripts\instalar_agendamento.ps1                       # todos os dias às 12:00
-.\scripts\instalar_agendamento.ps1 -Horas 09:00,18:30 -Dias Mon,Tue,Wed,Thu,Fri
-.\scripts\instalar_agendamento.ps1 -AcordarPC            # acorda o computador no horário
-.\scripts\instalar_agendamento.ps1 -Desativar            # ou -Remover, ou -SomenteMostrar
-```
-
-A tarefa roda com o seu usuário e com a sessão aberta (o Chrome abre visível). Se o computador estava desligado ou dormindo no horário, ela roda assim que possível. Os filtros de loja e modelo do modo automático ficam em `backend/config.json`.
 
 ### Coleta assistida (para lojas que bloqueiam robôs)
 
@@ -178,7 +165,7 @@ Os testes cobrem o parser de preços, a classificação de status, as regras de 
 
 **Nota de confiança que não troca de produto errado.** Ao recuperar um link, cada candidato passa por **regras duras**: marca, modelo, armazenamento e variantes (`FE`, `Ultra`, `Edge`, `+`) precisam bater. Candidato que viola alguma recebe nota 0, então um S25 nunca vira S25 Ultra e um A17 de 128 GB nunca vira o de 256 GB. Depois disso, a nota sobe com título idêntico ao cadastro e com o mesmo código de produto. A troca automática exige nota ≥ 0,90, página aberta com preço e **nenhum rival quase empatado** (duas cores do mesmo modelo viram revisão humana, não um palpite).
 
-**Coleta como comando, separado do servidor.** `python -m searching.run` não depende da interface aberta. O Agendador de Tarefas do Windows o chama diariamente, e o botão da tela chama o mesmo comando. O Flask só serve a interface e lê o banco.
+**Coleta como comando, separado do servidor.** `python -m searching.run` não depende da interface aberta, e o botão da tela chama o mesmo comando. O Flask só expõe a API e lê o banco. Como é um comando comum, qualquer agendador seu (Agendador de Tarefas, cron) pode chamá-lo.
 
 **Print pelo navegador.** O screenshot vem do próprio driver (`save_screenshot`), não da tela do Windows. Não importa se outra janela está na frente ou se a tela está bloqueada.
 
@@ -192,7 +179,7 @@ Os testes cobrem o parser de preços, a classificação de status, as regras de 
 - **Coleta assistida testada com loja simulada.** O fluxo completo (extensão, tela, servidor, print, cartão 1x) é testado ponta a ponta com Chrome real contra uma loja simulada. Os seletores da Magalu real, em especial o menu de pagamento, ainda precisam ser confirmados em uso.
 - **Só a Magazine Luiza tem adaptador.** Amazon e Casas Bahia são reconhecidas pelo domínio, mas não coletadas.
 - **Seletores da busca não validados ao vivo.** A leitura de preços e a busca da Magalu foram escritas a partir do código original e testadas com HTML salvo; como a loja estava bloqueando, não foram conferidas contra a página real nesta versão.
-- **Windows.** O agendamento usa o Agendador de Tarefas e o Chrome visível; a tarefa só roda com a sessão aberta.
+- **Windows.** Os scripts de inicialização são `.bat`, e a coleta automática abre o Chrome visível.
 - **Sem login.** Quem usa o computador usa o sistema.
 - **Histórico migrado.** Os dados anteriores à versão atual vêm de coletas que gravavam `OK` mesmo sem preço; esses casos foram reclassificados.
 
