@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "SEARCHING - Coleta assistida",
+  "version": "1.0.0",
+  "description": "Lê a página do produto que você abre pelo SEARCHING e envia preço e print ao sistema local. Uma página por clique seu.",
+  "permissions": [
+    "tabs",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*",
+        "http://localhost:5000/*",
+        "http://127.0.0.1:5000/*"
+      ],
+      "js": [
+        "ponte.js"
+      ],
+      "run_at": "document_start"
+    }
+  ]
+}

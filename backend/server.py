@@ -11,7 +11,7 @@ from io import BytesIO
 
 from sqlalchemy import select
 
-from searching import agendamento, relatorios, seguranca
+from searching import agendamento, assistida, relatorios, seguranca
 from searching.alerts import config as alertas_config
 from searching.alerts import email as alertas_email
 from searching.alerts import regras as alertas_regras
@@ -64,12 +64,15 @@ ORIGENS = seguranca.origens_permitidas(porta=CONFIG_SERVIDOR.porta)
 
 app = Flask(__name__, static_folder="dist", static_url_path="")
 CORS(app, origins=sorted(ORIGENS))  # só o frontend local; nada de "*"
+app.config["MAX_CONTENT_LENGTH"] = 40 * 1024 * 1024  # a captura traz o HTML da página e o print
 
 
 @app.before_request
 def proteger_servidor_local():
     """Recusa Host de fora (DNS rebinding) e escritas vindas de sites que não são o nosso frontend (CSRF)."""
-    motivo = seguranca.requisicao_bloqueada(request.method, request.host, request.headers.get("Origin"), ORIGENS)
+    # A extensão do Chrome envia as capturas com Origin "chrome-extension://..." e prova quem é pelo token secreto.
+    da_extensao = request.path == "/api/assistida/captura" and assistida.token_valido(request.headers.get("X-Searching-Token"))
+    motivo = seguranca.requisicao_bloqueada(request.method, request.host, None if da_extensao else request.headers.get("Origin"), ORIGENS)
     if motivo:
         return jsonify({"error": motivo}), 403
 
@@ -388,6 +391,53 @@ def salvar_regra_alerta(produto_id):
 def enviar_email_de_teste():
     ok, mensagem = alertas_servico.enviar_teste()
     return jsonify({"ok": ok, "message": mensagem}), (200 if ok else 500)
+
+# ==============================
+# Rotas: COLETA ASSISTIDA (fila + extensão do Chrome)
+# ==============================
+def _assistida(acao):
+    """Executa uma ação da coleta assistida dentro de uma sessão do banco, traduzindo erros de validação em 400."""
+    try:
+        with db_fabrica() as s:
+            return jsonify(acao(s))
+    except (assistida.SessaoInvalida, ValueError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/assistida/token", methods=["GET"])
+def assistida_token():
+    """Segredo que a página entrega à extensão no pareamento (a resposta não é legível por outros sites: sem CORS)."""
+    return jsonify({"token": assistida.obter_token(), "servidor": f"http://127.0.0.1:{CONFIG_SERVIDOR.porta}"})
+
+@app.route("/api/assistida/sessao", methods=["GET"])
+def assistida_sessao():
+    return _assistida(assistida.sessao)
+
+@app.route("/api/assistida/iniciar", methods=["POST"])
+def assistida_iniciar():
+    data = request.get_json(force=True, silent=True) or {}
+    return _assistida(lambda s: assistida.iniciar(s, data.get("stores"), data.get("include"), data.get("exclude")))
+
+@app.route("/api/assistida/captura", methods=["POST"])
+def assistida_captura():
+    if not assistida.token_valido(request.headers.get("X-Searching-Token")):
+        return jsonify({"error": "Token da extensão ausente ou inválido. Abra a tela Coleta assistida para parear."}), 401
+    d = request.get_json(force=True, silent=True) or {}
+    return _assistida(lambda s: assistida.registrar_captura(s, int(d.get("execucao_id", 0)), int(d.get("produto_id", 0)), d))
+
+@app.route("/api/assistida/link-quebrado", methods=["POST"])
+def assistida_link_quebrado():
+    d = request.get_json(force=True, silent=True) or {}
+    return _assistida(lambda s: assistida.registrar_link_quebrado(s, int(d.get("execucao_id", 0)), int(d.get("produto_id", 0))))
+
+@app.route("/api/assistida/pular", methods=["POST"])
+def assistida_pular():
+    d = request.get_json(force=True, silent=True) or {}
+    return _assistida(lambda s: assistida.pular(s, int(d.get("execucao_id", 0)), int(d.get("produto_id", 0))))
+
+@app.route("/api/assistida/encerrar", methods=["POST"])
+def assistida_encerrar():
+    d = request.get_json(force=True, silent=True) or {}
+    return _assistida(lambda s: assistida.encerrar(s, int(d.get("execucao_id", 0)), notificador=alertas_servico.Notificador()))
 
 @app.route("/api/health")
 def api_health():
