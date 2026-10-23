@@ -64,6 +64,8 @@ PAGINAS = {
     "/celular-samsung-galaxy-s25/p/abc123/te/gs25/": ("Celular Samsung Galaxy S25 5G, 256GB, 12GB RAM", "R$ 3.799,00", "R$ 3.998,95"),
     "/celular-samsung-galaxy-a17/p/def456/te/ga14/": ("Celular Samsung Galaxy A17 5G com IA, 128GB, 4GB RAM", "R$ 1.199,00", "R$ 1.332,22"),
 }
+BLOQUEIA_UMA_VEZ = "/bloqueado/p/zzz999/"
+PAGINAS[BLOQUEIA_UMA_VEZ] = ("Celular Samsung Galaxy S24+, 256GB, 12GB de RAM", "R$ 3.167,12", "R$ 3.599,00")
 PRODUTOS = [
     ("Samsung Galaxy S25 256GB", "/celular-samsung-galaxy-s25/p/abc123/te/gs25/"),
     ("Samsung Galaxy A17 5G 128GB", "/celular-samsung-galaxy-a17/p/def456/te/ga14/"),
@@ -75,7 +77,8 @@ ACESSOS = []
 class Loja(BaseHTTPRequestHandler):
     def do_GET(self):
         ACESSOS.append((time.time(), self.path))
-        if self.path in PAGINAS:
+        primeira_visita = sum(1 for _, c in ACESSOS if c == self.path) == 1
+        if self.path in PAGINAS and not (self.path == BLOQUEIA_UMA_VEZ and primeira_visita):
             titulo, preco, cartao = PAGINAS[self.path]
             corpo, codigo = PAGINA.format(titulo=titulo, preco=preco, cartao=cartao).encode(), 200
         else:
@@ -224,12 +227,42 @@ def main():
         assert all(f >= 3.0 for f in folgas), folgas
         print(f"[ok] intervalo entre páginas da loja: {folgas} s (mínimo 3 s)")
 
+        # aviso amarelo: fixo no topo, com a contagem, o motivo e um Refazer por produto
+        esperar_texto(driver, "1 produto(s) com erro", 10)
+        driver.execute_script("window.scrollTo(0, document.documentElement.scrollHeight)")
+        time.sleep(0.4)
+        topo = driver.execute_script("return document.querySelector('[role=alert]').getBoundingClientRect().top")
+        assert -1 <= topo <= 2, f"o aviso não ficou fixo no topo ao rolar a página (top={topo})"
+        driver.execute_script("window.scrollTo(0, 0)")
+        driver.execute_script("document.querySelector('[data-testid=alternar-erros]').click()")
+        lista = esperar_texto(driver, "S24+", 10)
+        assert "BLOQUEIO" in lista
+        if saida:
+            driver.save_screenshot(str(Path(saida) / "tela_aviso_erros.png"))
+        print("[ok] aviso amarelo: '1 produto(s) com erro', fixo no topo ao rolar, com o motivo (BLOQUEIO) e o botão Refazer")
+
+        # Refazer pelo aviso: uma página por clique; quando dá certo o aviso some
+        time.sleep(3.2)
+        driver.execute_script("document.querySelector('[data-testid=refazer-erro]').click()")
+        esperar_texto(driver, "R$ 3.167,12", 60)
+        fim = time.time() + 15
+        while time.time() < fim and driver.execute_script("return document.querySelector('[role=alert]') !== null"):
+            time.sleep(0.3)
+        assert driver.execute_script("return document.querySelector('[role=alert]') === null"), "o aviso deveria sumir quando não há mais erros"
+        print("[ok] Refazer pelo aviso: PIX R$ 3.167,12 lido e o aviso sumiu")
+        sessao = http(f"http://127.0.0.1:{PORTA_API}/api/assistida/sessao")
+        assert [i["coleta"]["status"] for i in sessao["itens"]] == ["OK", "OK", "OK"]
+        assert len(list((tmp / "prints").rglob("*.png"))) == 4  # a falha e a coleta refeita guardam um print cada
+        pedidos = [t for t, c in ACESSOS if c != "/favicon.ico"]
+        folgas = [round(b - a, 1) for a, b in zip(pedidos, pedidos[1:])]
+        assert all(f >= 3.0 for f in folgas), folgas
+
         clicar(driver, "Encerrar")
         tela = esperar_texto(driver, "Execução encerrada", 20)
-        assert "2 de 3 com sucesso" in tela, tela[-500:]
+        assert "3 de 3 com sucesso" in tela, tela[-500:]
         hist = http(f"http://127.0.0.1:{PORTA_API}/api/historico")
-        assert [h["PIX_CENTAVOS"] for h in hist] == [379900, 119900, None], hist
-        print("[ok] execução encerrada: 2 de 3 com sucesso; coletas já nos relatórios com preço numérico")
+        assert [h["PIX_CENTAVOS"] for h in hist] == [379900, 119900, None, 316712], hist
+        print("[ok] execução encerrada: 3 de 3 com sucesso; a falha anterior continua no histórico")
         print("\nTUDO CERTO: o fluxo assistido funciona de ponta a ponta.")
     finally:
         if driver:

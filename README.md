@@ -127,6 +127,9 @@ Algumas lojas, como a Magazine Luiza, recusam navegador controlado por programa.
 1. Instale a extensão uma vez (`chrome://extensions`, Modo do desenvolvedor, **Carregar sem compactação**, pasta `extensao`). Veja [extensao/README.md](extensao/README.md).
 2. Abra a tela **Coleta assistida**, clique em **Começar** e arraste a janela da loja para o outro monitor.
 3. A cada **Próximo** (ou espaço, ou →) o produto abre e o resultado aparece preenchido. Há também Refazer, Pular e Link quebrado.
+4. Se algum produto sair com erro (qualquer status diferente de `OK`, inclusive `SUSPEITO`), um **aviso amarelo fixo no topo** mostra a contagem ("⚠ 3 produtos com erro"). Ao abri-lo, cada produto aparece com o motivo e um botão **Refazer**. O aviso acompanha você pela fila e some quando não há mais erro pendente.
+
+**Um clique por página, de propósito.** Não existe um botão "Coletar tudo" que abra os produtos sozinho com pausas aleatórias: numa loja que bloqueia acesso automatizado, isso seria automatizar a navegação num contexto que ela não detecta, ou seja, driblar o bloqueio. Aqui a decisão de abrir cada página é sua. Para volume sem cliques, os caminhos são a coleta automática nas lojas que a permitem e, na Magalu, um canal oficial.
 
 Tudo o que vem depois é igual à coleta automática: validação de título, status, preço suspeito, alertas por e-mail com o print e relatórios. Intervalo mínimo de 3 segundos entre páginas, uma página por clique.
 

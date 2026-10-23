@@ -37,6 +37,7 @@ export default function Assisted() {
   const [atualId, setAtualId] = useState(null);
   const [etapa, setEtapa] = useState(null);
   const [avisos, setAvisos] = useState([]);
+  const [mostrarErros, setMostrarErros] = useState(false);
   const [aguardando, setAguardando] = useState(false);
   const [livreEm, setLivreEm] = useState(0);
   const [agora, setAgora] = useState(Date.now());
@@ -243,12 +244,61 @@ export default function Assisted() {
   };
 
   // ---------- tela ----------
+  // produtos desta sessão cuja última coleta não foi OK (inclui SUSPEITO): aparecem no aviso amarelo até serem refeitos
+  const erros = itens.filter((i) => i.coleta && i.coleta.status !== "OK");
   const concluidos = sess?.ativa ? sess.concluidos : 0;
   const total = sess?.ativa ? sess.total : 0;
   const fmtVar = (v) => (v == null ? null : `${v > 0 ? "+" : ""}${String(v).replace(".", ",")}%`);
 
   return (
     <div className="page">
+      {/* aviso fixo no topo: continua à vista enquanto você navega pelo resto da fila e some quando não há mais erro */}
+      {sess?.ativa && erros.length > 0 && (
+        <div
+          role="alert"
+          style={{
+            position: "sticky", top: 0, zIndex: 20, marginBottom: 12, borderRadius: 12, padding: "10px 16px",
+            background: "#fbbf24", color: "#1f1600", boxShadow: "0 6px 24px rgba(0,0,0,0.35)",
+          }}
+        >
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <strong>
+              ⚠ {erros.length} produto(s) com erro: {mostrarErros ? "ocultar" : "ver / refazer"}
+            </strong>
+            <button
+              data-testid="alternar-erros"
+              className="btn"
+              style={{ background: "#1f1600", color: "#fbbf24", border: "none" }}
+              onClick={() => setMostrarErros((v) => !v)}
+            >
+              {mostrarErros ? "Ocultar" : "Ver erros"}
+            </button>
+          </div>
+          {mostrarErros && (
+            <ul style={{ listStyle: "none", margin: "10px 0 0", padding: 0, display: "grid", gap: 8 }}>
+              {erros.map((i) => (
+                <li key={i.produto_id} className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+                  <span>
+                    <strong>{i.nome}</strong> · {i.coleta.status.replaceAll("_", " ")}
+                    {i.coleta.detalhe ? <span style={{ opacity: 0.8 }}> ({i.coleta.detalhe})</span> : null}
+                  </span>
+                  <button
+                    data-testid="refazer-erro"
+                    className="btn"
+                    style={{ background: "#1f1600", color: "#fbbf24", border: "none" }}
+                    disabled={!podeNavegar}
+                    onClick={() => abrir(i)}
+                  >
+                    Refazer
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div style={{ fontSize: 12, marginTop: 6, opacity: 0.85 }}>Refazer abre uma página por clique, como no Próximo.</div>
+        </div>
+      )}
+
       <section className="hero">
         <span className="eyebrow">Magazine Luiza</span>
         <div className="section-heading">

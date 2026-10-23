@@ -16,6 +16,15 @@ automática.
 
 Intervalo mínimo: a extensão nunca abre mais de **uma página a cada 3 segundos**, mesmo que a tela peça.
 
+Se um produto sair com erro, o SEARCHING mostra um **aviso amarelo fixo no topo** com a contagem, o motivo e um Refazer por produto
+(também um clique, uma página).
+
+## Por que não há "Coletar tudo"
+
+A extensão abre uma página **por clique seu**, e isso é intencional. Um modo que percorresse a fila sozinho, com pausas
+aleatórias, seria automação de navegação feita para passar despercebida pelo anti-bot da loja. A extensão não faz isso: não tem
+temporizador, não encadeia páginas e não esconde que é uma extensão.
+
 ## Instalação (uma vez)
 
 1. No Chrome, abra `chrome://extensions`.
