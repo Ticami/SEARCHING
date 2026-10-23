@@ -19,6 +19,7 @@ from searching.alerts import servico as alertas_servico
 from searching.core.precos import formatar_brl
 from searching.db import links as repo_links
 from searching.db.models import Alerta, Coleta, HistoricoLink, Produto, RevisaoLink
+from searching.db.session import PRINTS_DIR as prints_dir_config
 from searching.db.session import criar_engine, iniciar_banco
 
 # ==============================
@@ -26,7 +27,7 @@ from searching.db.session import criar_engine, iniciar_banco
 # ==============================
 BASE_DIR = os.path.dirname(__file__)
 DATA_DIR = os.path.join(BASE_DIR, "data")
-PRINTS_DIR = os.path.join(BASE_DIR, "prints")
+PRINTS_DIR = str(prints_dir_config)
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 os.makedirs(DATA_DIR, exist_ok=True)
