@@ -188,7 +188,7 @@ p { margin: 0; }
 
 /* Utilities */
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
-.stack { display: grid; gap: 12px; }
+.stack { display: grid; gap: 12px; align-content: start; }
 .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .mt-2 { margin-top: 8px; }
 .mt-4 { margin-top: 20px; }

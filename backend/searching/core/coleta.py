@@ -16,7 +16,7 @@ from ..alerts import servico as alertas
 from ..alerts.servico import Notificador
 from ..db import links as repo_links
 from ..db.models import Coleta, Configuracao, Execucao, Produto, RevisaoLink, TentativaRecuperacao
-from ..db.session import BACKEND_DIR, CONFIG_PADRAO
+from ..db.session import BACKEND_DIR, CONFIG_PADRAO, PRINTS_DIR
 from ..links.recuperacao import recuperar
 from .lojas import modelo_simples, normalizar, normalizar_loja
 from .navegador import Navegador
@@ -27,7 +27,6 @@ from .validacao import Leitura, classificar, eh_suspeito
 
 log = logging.getLogger("searching.coleta")
 
-PRINTS_DIR = BACKEND_DIR / "prints"
 # Falhas que podem ser passageiras (rede lenta, página carregando): vale tentar de novo.
 STATUS_RETENTAVEIS = {StatusColeta.TIMEOUT, StatusColeta.ERRO_INESPERADO, StatusColeta.PRECO_NAO_ENCONTRADO}
 

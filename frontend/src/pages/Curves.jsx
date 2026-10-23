@@ -179,7 +179,7 @@ export default function Curves() {
                 <LineChart data={dataChart} margin={{ top: 16, right: 32, left: 0, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
                   <XAxis dataKey="dataLabel" stroke="#75839d" />
-                  <YAxis stroke="#75839d" />
+                  <YAxis stroke="#75839d" domain={[(min) => Math.floor(min * 0.97), (max) => Math.ceil(max * 1.03)]} />
                   <Tooltip
                     formatter={(value, name) => {
                       if (value == null) return ["-", name];

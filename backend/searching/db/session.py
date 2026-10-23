@@ -8,6 +8,8 @@ from .models import Base, Configuracao
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 DB_PADRAO = BACKEND_DIR / "data" / "searching.db"
+# Pasta dos prints; SEARCHING_PRINTS permite apontar para outra (usado pelos dados de demonstração).
+PRINTS_DIR = Path(os.environ.get("SEARCHING_PRINTS") or BACKEND_DIR / "prints")
 
 # Valores padrão do PRD (seção 15); podem ser alterados na tabela configuracoes.
 CONFIG_PADRAO = {
