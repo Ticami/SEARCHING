@@ -1,0 +1,38 @@
+# Dependências
+node_modules/
+package-lock.json
+!frontend/package-lock.json
+
+# Build
+frontend/dist/
+dist/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Segredos
+.env
+.env.*
+!.env.example
+
+# Dados gerados em execução
+backend/prints/
+backend/data/
+backend/links.csv
+*.db
+*.sqlite3
+logs/
+*.log
+
+# Arquivos soltos / temporários
+backend_main_snapshot.txt
+backend/fix_historico.py
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, NavLink } from "react-router-dom";
 import Home from "./pages/Home";
 import Reports from "./pages/Reports";
@@ -8,53 +8,12 @@ import Curves from "./pages/Curves"; // nova rota
 import "./styles/global.css";
 
 export default function App() {
-  const ACCESS_KEY = "searching_auth";
-  const PASSCODE = "***REMOVED***";
-  const [input, setInput] = useState("");
-  const [error, setError] = useState("");
-  const [isAuthorized, setIsAuthorized] = useState(
-    () => localStorage.getItem(ACCESS_KEY) === PASSCODE
-  );
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (input.trim() === PASSCODE) {
-      localStorage.setItem(ACCESS_KEY, PASSCODE);
-      setIsAuthorized(true);
-      setError("");
-      setInput("");
-    } else {
-      setError("Senha incorreta. Tente novamente.");
-    }
-  };
-
   useEffect(() => {
-    if (isAuthorized) {
-      localStorage.setItem(ACCESS_KEY, PASSCODE);
-    }
-  }, [isAuthorized]);
-
-  if (!isAuthorized) {
-    return (
-      <div className="auth-shell">
-        <div className="auth-card">
-          <h1>SEARCHING</h1>
-          <p>Digite a senha para continuar.</p>
-          <form className="auth-form" onSubmit={handleSubmit}>
-            <input
-              type="password"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Senha"
-              autoFocus
-            />
-            {error && <span className="auth-error">{error}</span>}
-            <button className="btn primary" type="submit">Entrar</button>
-          </form>
-        </div>
-      </div>
-    );
-  }
+    // remove a chave da antiga tela de senha, se existir no navegador
+    try {
+      localStorage.removeItem("searching_auth");
+    } catch {}
+  }, []);
 
   return (
     <Router>
