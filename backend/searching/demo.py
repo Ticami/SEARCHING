@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .core.precos import formatar_brl
 from .db import links
-from .db.models import Alerta, Coleta, Execucao, HistoricoLink, Produto, RevisaoLink
+from .db.models import Alerta, Coleta, Execucao, Produto, RevisaoLink
 from .db.session import BACKEND_DIR, criar_engine, iniciar_banco
 
 LOJA = "Loja Demo"
@@ -105,7 +105,7 @@ def gerar_demo(db: Path, prints_dir: Path, hoje: datetime | None = None, semente
         coleta_do_alerta: dict[str, Coleta] = {}
         for dias_atras in range(DIAS - 1, -1, -1):
             inicio = hoje - timedelta(days=dias_atras)
-            ex = Execucao(iniciada_em=inicio, finalizada_em=inicio + timedelta(minutes=7), origem="agendada", total=len(PRODUTOS))
+            ex = Execucao(iniciada_em=inicio, finalizada_em=inicio + timedelta(minutes=7), origem="manual", total=len(PRODUTOS))
             s.add(ex)
             s.flush()
             resumo["execucoes"] += 1

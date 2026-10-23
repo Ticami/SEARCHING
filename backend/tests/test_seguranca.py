@@ -84,7 +84,7 @@ def test_post_de_site_externo_nao_cria_nada_mesmo_como_text_plain(api):
     assert r.status_code == 200 and len(c.get("/api/links").get_json()) == 1
 
 
-@pytest.mark.parametrize("rota, metodo", [("/api/coletar", "post"), ("/api/alertas/teste", "post"), ("/api/schedule", "post"),
+@pytest.mark.parametrize("rota, metodo", [("/api/coletar", "post"), ("/api/alertas/teste", "post"), ("/api/assistida/iniciar", "post"),
                                            ("/api/links", "delete"), ("/api/alertas/config", "put")])
 def test_nenhuma_rota_de_escrita_aceita_origem_externa(api, rota, metodo):
     c, _ = api

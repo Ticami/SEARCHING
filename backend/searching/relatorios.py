@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from .core.precos import formatar_brl
 from .core.status import StatusColeta
-from .db.models import Alerta, Coleta, Produto, RevisaoLink
+from .db.models import Alerta, Coleta, Execucao, Produto, RevisaoLink
 
 LIMITE_EXPORTACAO = 50_000
 
@@ -152,6 +152,26 @@ def exportar_excel(s: Session, ids: list[int]) -> bytes:
 
 
 # ---------- painel de saúde ----------
+def ultima_execucao(s: Session) -> dict | None:
+    """Resumo da execução mais recente (automática ou assistida)."""
+    e = s.scalars(select(Execucao).order_by(Execucao.iniciada_em.desc()).limit(1)).first()
+    if e is None:
+        return None
+    duracao = (e.finalizada_em - e.iniciada_em).total_seconds() if e.finalizada_em else None
+    return {
+        "id": e.id,
+        "iniciada_em": e.iniciada_em.isoformat(timespec="seconds"),
+        "duracao_s": round(duracao) if duracao is not None else None,
+        "origem": e.origem,
+        "total": e.total,
+        "ok": e.ok,
+        "falhas": e.falhas,
+        "links_corrigidos": e.links_corrigidos,
+        "em_revisao": e.em_revisao,
+        "em_andamento": e.finalizada_em is None,
+    }
+
+
 def saude(s: Session, agora: datetime | None = None, dias: int = 7) -> dict:
     """Taxa de sucesso por loja, falhas por motivo, links com problema e alertas dos últimos dias."""
     agora = agora or datetime.now()
@@ -191,4 +211,5 @@ def saude(s: Session, agora: datetime | None = None, dias: int = 7) -> dict:
         "produtos_com_falha_na_ultima_coleta": com_falha,
         "links_em_revisao": s.scalar(select(func.count()).select_from(RevisaoLink).where(RevisaoLink.estado == "pendente")) or 0,
         "alertas": {"enviados": contagem.get(True, 0), "falhos": contagem.get(False, 0)},
+        "ultima_execucao": ultima_execucao(s),
     }

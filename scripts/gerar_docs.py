@@ -30,14 +30,23 @@ PRINTS = BACKEND / "data" / "demo" / "prints"
 
 # (arquivo, rota, altura da janela, ação opcional em JS antes da foto)
 TELAS = [
-    ("home", "/", 1500, None),
+    ("home", "/", 1800, None),
     ("relatorios", "/reports", 900, None),
     ("curvas", "/curves", 900, None),
     ("prints", "/prints", 1100, "const b=[...document.querySelectorAll('.folders button')][0]; b && b.click();"),
     ("revisao", "/review", 1000, None),
     ("alertas", "/alerts", 1700, None),
 ]
+PORTA_API, PORTA_APP = 5100, 5273  # portas próprias: não esbarram no programa que você já tenha aberto (5000 e 5173)
 SALVAR_PNG = {"home", "curvas", "revisao"}  # o README mantém só 3 imagens estáticas; o GIF mostra todas
+
+
+def _porta_ocupada(porta: int) -> bool:
+    import socket
+
+    with socket.socket() as s:
+        s.settimeout(0.5)
+        return s.connect_ex(("127.0.0.1", porta)) == 0
 
 
 def esperar(url: str, tentativas: int = 60) -> None:
@@ -59,8 +68,15 @@ def main() -> None:
     DOCS.mkdir(exist_ok=True)
     gerar_demo(DB, PRINTS)
 
+    ocupadas = [p for p in (PORTA_API, PORTA_APP) if _porta_ocupada(p)]
+    if ocupadas:
+        sys.exit(f"Portas {ocupadas} ocupadas: feche o que as usa e rode de novo (nada foi alterado).")
+
     env = {
         **os.environ,
+        "SEARCHING_PORT": str(PORTA_API),
+        "SEARCHING_API": f"http://127.0.0.1:{PORTA_API}",
+        "SEARCHING_ORIGENS": f"http://localhost:{PORTA_APP},http://127.0.0.1:{PORTA_APP}",
         "SEARCHING_DB": str(DB),
         "SEARCHING_PRINTS": str(PRINTS),
         # endereços de exemplo: a tela Alertas não pode mostrar o e-mail real de ninguém
@@ -68,11 +84,11 @@ def main() -> None:
         "ALERTA_DESTINATARIOS": "voce@example.com",
     }
     servidor = subprocess.Popen([sys.executable, "server.py"], cwd=BACKEND, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    vite = subprocess.Popen(["npm.cmd", "run", "dev", "--", "--host", "127.0.0.1", "--strictPort"], cwd=FRONTEND, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    vite = subprocess.Popen(["npm.cmd", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(PORTA_APP), "--strictPort"], cwd=FRONTEND, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     driver = None
     try:
-        esperar("http://127.0.0.1:5000/api/health")
-        esperar("http://127.0.0.1:5173/")
+        esperar(f"http://127.0.0.1:{PORTA_API}/api/health")
+        esperar(f"http://127.0.0.1:{PORTA_APP}/")
 
         opcoes = Options()
         opcoes.add_argument("--headless=new")
@@ -82,7 +98,7 @@ def main() -> None:
         quadros = []
         for nome, rota, altura, js in TELAS:
             driver.set_window_size(1280, altura)
-            driver.get(f"http://localhost:5173{rota}")
+            driver.get(f"http://localhost:{PORTA_APP}{rota}")
             time.sleep(3)
             if js:
                 driver.execute_script(js)

@@ -1,6 +1,8 @@
 """Ponto de entrada da coleta, independente do servidor web.
 
-Uso (a partir de backend/):  python -m searching.run [--origem agendada|manual] [--loja X] [--incluir X] [--excluir X]
+Uso (a partir de backend/):  python -m searching.run [--origem manual|agendada] [--loja X] [--incluir X] [--excluir X]
+
+--origem só marca de onde veio a execução no histórico; use "agendada" se chamar o comando por um agendador seu.
 Imprime o resumo em JSON na última linha da saída. Códigos de saída: 0 ok, 2 já há coleta em andamento, 1 erro.
 """
 import argparse
@@ -9,7 +11,6 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 
-from .agendamento import filtros_da_agenda
 from .core.coleta import executar_coleta
 from .core.trava import ColetaEmAndamento
 from .db.migracao_csv import importar_se_vazio
@@ -40,13 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     fabrica = iniciar_banco(criar_engine())
     importar_se_vazio(fabrica)
 
-    lojas, incluir, excluir = args.loja, args.incluir, args.excluir
-    if args.origem == "agendada" and not (lojas or incluir or excluir):
-        # A tarefa do Windows roda sem argumentos: os filtros vêm do config.json editado na tela Home.
-        lojas, incluir, excluir = filtros_da_agenda()
-
     try:
-        resumo = executar_coleta(fabrica, args.origem, lojas, incluir, excluir)
+        resumo = executar_coleta(fabrica, args.origem, args.loja, args.incluir, args.excluir)
     except ColetaEmAndamento as exc:
         print(json.dumps({"erro": str(exc), "em_andamento": True}))
         return 2
