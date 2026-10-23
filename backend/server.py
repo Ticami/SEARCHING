@@ -1,6 +1,5 @@
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
-import pandas as pd
 import os
 import re
 import json
@@ -13,7 +12,8 @@ from sqlalchemy import select
 
 from searching import agendamento
 from searching.core.precos import formatar_brl
-from searching.db.models import Coleta, Produto
+from searching.db import links as repo_links
+from searching.db.models import Coleta, HistoricoLink, Produto, RevisaoLink
 from searching.db.session import criar_engine, iniciar_banco
 
 # ==============================
@@ -22,8 +22,6 @@ from searching.db.session import criar_engine, iniciar_banco
 BASE_DIR = os.path.dirname(__file__)
 DATA_DIR = os.path.join(BASE_DIR, "data")
 PRINTS_DIR = os.path.join(BASE_DIR, "prints")
-LINKS_PATH = os.path.join(BASE_DIR, "links.csv")
-HIST_PATH = os.path.join(DATA_DIR, "historico.csv")
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -54,156 +52,144 @@ app = Flask(__name__, static_folder="dist", static_url_path="")
 CORS(app)
 
 # ==============================
-# Utils
+# Rotas: LINKS (banco de dados)
 # ==============================
-def read_csv_safe(path, prefer_semicolon=True):
-    if not os.path.exists(path) or os.path.getsize(path) == 0:
-        return pd.DataFrame()
-    if prefer_semicolon:
-        try:
-            return pd.read_csv(path, sep=";", encoding="utf-8-sig", engine="python")
-        except Exception:
-            pass
-    return pd.read_csv(path, sep=None, engine="python", encoding="utf-8")
+def _produto_do_payload(s, data):
+    """Localiza o produto pelo id (preferido) ou, por compatibilidade, por nome + link atual."""
+    if data.get("id") is not None:
+        return s.get(Produto, int(data["id"]))
+    nome = data.get("originalNome") or data.get("nome")
+    link = data.get("originalLink") or data.get("link")
+    loja = data.get("originalLoja") or data.get("loja") or ""
+    consulta = select(Produto).where(Produto.ativo.is_(True), Produto.nome_comercial == nome, Produto.url_atual == link)
+    if loja:
+        consulta = consulta.where(Produto.loja == loja)
+    return s.scalars(consulta).first()
 
-def _infer_store(url: str) -> str:
-    u = (str(url) or "").lower()
-    if "magazineluiza" in u or "magalu" in u:
-        return "Magazine Luiza"
-    if "amazon" in u:
-        return "Amazon"
-    if "casasbahia" in u:
-        return "Casas Bahia"
-    return ""
+def _link_json(p):
+    return {"ID": p.id, "NOME COMERCIAL": p.nome_comercial, "LINK": p.url_atual, "LOJA": p.loja}
 
-def _normalize_links_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Garante colunas ['NOME COMERCIAL','LINK','LOJA'] e preenche LOJA por inferência quando faltar."""
-    if df is None or df.empty:
-        return pd.DataFrame(columns=["NOME COMERCIAL", "LINK", "LOJA"])
-
-    cols = [c.strip() for c in df.columns]
-    df.columns = cols
-
-    # mapas comuns de nomes
-    rename_map = {}
-    if "NOME" in cols and "NOME COMERCIAL" not in cols:
-        rename_map["NOME"] = "NOME COMERCIAL"
-    if "URL" in cols and "LINK" not in cols:
-        rename_map["URL"] = "LINK"
-
-    if rename_map:
-        df = df.rename(columns=rename_map)
-
-    # cria coluna LOJA se não existir
-    if "LOJA" not in df.columns:
-        df["LOJA"] = ""
-
-    # preenche LOJA vazia por inferência do link
-    if "LINK" in df.columns:
-        df["LOJA"] = df.apply(
-            lambda r: (r.get("LOJA") or "").strip() or _infer_store(r.get("LINK", "")),
-            axis=1
-        )
-    else:
-        # caso extremo: sem LINK (mantém estrutura)
-        df["LINK"] = df.get("LINK", "")
-
-    # ordena e remove espaços no header
-    df = df[["NOME COMERCIAL", "LINK", "LOJA"]]
-    return df
-
-def _persist_links_df(df: pd.DataFrame):
-    df.to_csv(LINKS_PATH, sep=";", index=False, encoding="utf-8-sig")
-
-# ==============================
-# Rotas: LINKS
-# ==============================
 @app.route("/api/links", methods=["GET"])
 def listar_links():
-    if not os.path.exists(LINKS_PATH) or os.path.getsize(LINKS_PATH) == 0:
-        return jsonify([])
-    df = read_csv_safe(LINKS_PATH)
-    df = _normalize_links_df(df)
-
-    # se houver LOJA inferida que não estava gravada, persistimos para padronizar
-    _persist_links_df(df)
-    return jsonify(df.to_dict(orient="records"))
+    with db_fabrica() as s:
+        return jsonify([_link_json(p) for p in repo_links.listar_ativos(s)])
 
 @app.route("/api/links", methods=["POST"])
 def adicionar_link():
     data = request.get_json(force=True, silent=True) or {}
-    nome = (data.get("nome") or "").strip()
-    link = (data.get("link") or "").strip()
-    loja = (data.get("loja") or "").strip() or _infer_store(link)
-
-    if not nome or not link:
-        return jsonify({"error": "Campos obrigatórios: nome e link"}), 400
-
-    novo = pd.DataFrame([[nome, link, loja]], columns=["NOME COMERCIAL", "LINK", "LOJA"])
-
-    if os.path.exists(LINKS_PATH) and os.path.getsize(LINKS_PATH) > 0:
-        antigo = _normalize_links_df(read_csv_safe(LINKS_PATH))
-        df_final = pd.concat([antigo, novo], ignore_index=True)
-    else:
-        df_final = novo
-
-    _persist_links_df(df_final)
-    return jsonify({"message": "Link adicionado com sucesso!"})
+    try:
+        with db_fabrica() as s:
+            produto = repo_links.criar(s, data.get("nome"), data.get("link"), data.get("loja"))
+            s.commit()
+            return jsonify({"message": "Link adicionado com sucesso!", "id": produto.id})
+    except repo_links.LinkInvalido as e:
+        return jsonify({"error": str(e)}), (409 if "Já existe" in str(e) else 400)
 
 @app.route("/api/links", methods=["PUT"])
 def editar_link():
     data = request.get_json(force=True, silent=True) or {}
-    original_nome = data.get("originalNome")
-    original_link = data.get("originalLink")
-    original_loja = data.get("originalLoja", "")
-
-    novo_nome = data.get("nome")
-    novo_link = data.get("link")
-    nova_loja = data.get("loja") or _infer_store(novo_link)
-
-    if not os.path.exists(LINKS_PATH):
-        return jsonify({"error": "links.csv não encontrado"}), 404
-
-    df = _normalize_links_df(read_csv_safe(LINKS_PATH))
-    mask = (df["NOME COMERCIAL"] == original_nome) & (df["LINK"] == original_link)
-    # se havia loja na origem, filtra também
-    if original_loja:
-        mask = mask & (df["LOJA"] == original_loja)
-
-    if not mask.any():
-        return jsonify({"error": "Link não encontrado"}), 404
-
-    df.loc[mask, "NOME COMERCIAL"] = novo_nome
-    df.loc[mask, "LINK"] = novo_link
-    df.loc[mask, "LOJA"] = nova_loja
-
-    _persist_links_df(df)
-    return jsonify({"message": "Link atualizado com sucesso!"})
+    try:
+        with db_fabrica() as s:
+            produto = _produto_do_payload(s, data)
+            if produto is None:
+                return jsonify({"error": "Link não encontrado"}), 404
+            repo_links.atualizar(s, produto, data.get("nome"), data.get("link"), data.get("loja"))
+            s.commit()
+            return jsonify({"message": "Link atualizado com sucesso!"})
+    except repo_links.LinkInvalido as e:
+        return jsonify({"error": str(e)}), 409
 
 @app.route("/api/links", methods=["DELETE"])
 def deletar_link():
+    """Desativa o produto (o histórico de coletas é preservado)."""
     data = request.get_json(force=True, silent=True) or {}
-    nome = data.get("nome")
-    link = data.get("link")
-    loja = data.get("loja", "")
+    with db_fabrica() as s:
+        produto = _produto_do_payload(s, data)
+        if produto is None:
+            return jsonify({"error": "Link não encontrado"}), 404
+        repo_links.desativar(s, produto)
+        s.commit()
+        return jsonify({"message": "Link removido com sucesso!"})
 
-    if not os.path.exists(LINKS_PATH):
-        return jsonify({"error": "links.csv não encontrado"}), 404
+@app.route("/api/links/historico", methods=["GET"])
+def historico_de_links():
+    """Trocas de link (manuais e automáticas), da mais recente para a mais antiga."""
+    produto_id = request.args.get("produto_id", type=int)
+    with db_fabrica() as s:
+        consulta = select(HistoricoLink, Produto).join(Produto, HistoricoLink.produto_id == Produto.id)
+        if produto_id:
+            consulta = consulta.where(HistoricoLink.produto_id == produto_id)
+        linhas = s.execute(consulta.order_by(HistoricoLink.em.desc(), HistoricoLink.id.desc())).all()
+        return jsonify([
+            {
+                "id": h.id, "produto_id": p.id, "produto": p.nome_comercial, "url_antiga": h.url_antiga,
+                "url_nova": h.url_nova, "motivo": h.motivo, "origem": h.origem,
+                "nota_confianca": h.nota_confianca, "em": h.em.isoformat(timespec="seconds"),
+                "revertivel": p.url_atual == h.url_nova,
+            }
+            for h, p in linhas
+        ])
 
-    df = _normalize_links_df(read_csv_safe(LINKS_PATH))
-    before = len(df)
+@app.route("/api/links/historico/<int:historico_id>/reverter", methods=["POST"])
+def reverter_troca_de_link(historico_id):
+    with db_fabrica() as s:
+        h = s.get(HistoricoLink, historico_id)
+        if h is None:
+            return jsonify({"error": "Troca não encontrada"}), 404
+        try:
+            repo_links.reverter(s, h)
+        except repo_links.LinkInvalido as e:
+            return jsonify({"error": str(e)}), 409
+        s.commit()
+        return jsonify({"message": "Link revertido."})
 
-    mask = (df["NOME COMERCIAL"] == nome) & (df["LINK"] == link)
-    if loja:
-        mask = mask & (df["LOJA"] == loja)
+# ==============================
+# Rotas: REVISÃO DE LINKS
+# ==============================
+def _revisao_json(s, r):
+    p = s.get(Produto, r.produto_id)
+    ultima = s.scalars(
+        select(Coleta).where(Coleta.produto_id == p.id).order_by(Coleta.coletado_em.desc()).limit(1)
+    ).first()
+    print_url = None
+    if ultima and ultima.caminho_print:
+        partes = ultima.caminho_print.replace("\\", "/").split("/")
+        if len(partes) >= 2:
+            print_url = f"/api/prints/{partes[-2]}/{partes[-1]}"
+    return {
+        "id": r.id,
+        "produto": {"id": p.id, "nome": p.nome_comercial, "loja": p.loja, "url_atual": p.url_atual, "ativo": p.ativo},
+        "motivo": r.motivo,
+        "candidatos": r.candidatos or [],
+        "estado": r.estado,
+        "criado_em": r.criado_em.isoformat(timespec="seconds") if r.criado_em else None,
+        "ultima_coleta": {
+            "status": ultima.status, "erro_detalhe": ultima.erro_detalhe,
+            "coletado_em": ultima.coletado_em.isoformat(timespec="seconds"), "print_url": print_url,
+        } if ultima else None,
+    }
 
-    df = df.loc[~mask]
+@app.route("/api/revisoes", methods=["GET"])
+def listar_revisoes():
+    estado = request.args.get("estado", "pendente")
+    with db_fabrica() as s:
+        itens = s.scalars(select(RevisaoLink).where(RevisaoLink.estado == estado).order_by(RevisaoLink.id.desc())).all()
+        return jsonify([_revisao_json(s, r) for r in itens])
 
-    if len(df) == before:
-        return jsonify({"error": "Link não encontrado"}), 404
-
-    _persist_links_df(df)
-    return jsonify({"message": "Link removido com sucesso!"})
+@app.route("/api/revisoes/<int:revisao_id>/resolver", methods=["POST"])
+def resolver_revisao(revisao_id):
+    """acao='aprovar' (com o link escolhido ou colado) ou 'desativar' o produto."""
+    data = request.get_json(force=True, silent=True) or {}
+    with db_fabrica() as s:
+        r = s.get(RevisaoLink, revisao_id)
+        if r is None:
+            return jsonify({"error": "Revisão não encontrada"}), 404
+        try:
+            repo_links.resolver_revisao(s, r, data.get("acao"), data.get("url"))
+        except repo_links.LinkInvalido as e:
+            return jsonify({"error": str(e)}), 400
+        s.commit()
+        return jsonify({"message": "Revisão resolvida."})
 
 # ==============================
 # Rotas: PRINTS / HISTÓRICO (mantidas)
@@ -250,6 +236,7 @@ def listar_historico():
                     "CREDITO": formatar_brl(c.preco_cartao_1x_centavos) if c.preco_cartao_1x_centavos is not None else "",
                     "STATUS": c.status,
                     "LINK": p.url_atual,
+                    "PRODUTO_ID": p.id,
                     "PIX_CENTAVOS": c.preco_pix_centavos,
                     "CREDITO_CENTAVOS": c.preco_cartao_1x_centavos,
                     "ERRO_DETALHE": c.erro_detalhe or "",
@@ -359,6 +346,6 @@ if __name__ == "__main__":
     print("===========================================")
     print("   🚀 Servidor Flask iniciado com sucesso! ")
     print("   📂 Lendo histórico: data/historico.csv")
-    print("   📄 Lendo links: links.csv")
+    print("   📄 Links no banco de dados (data/searching.db)")
     print("===========================================")
     app.run(host="0.0.0.0", port=5000, debug=True)

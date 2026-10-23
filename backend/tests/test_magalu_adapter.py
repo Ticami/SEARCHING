@@ -48,6 +48,37 @@ def test_redirecionamento_para_busca_nao_e_produto():
     assert not leitura.url_de_produto
 
 
+def test_codigo_e_urls_base():
+    a = MagaluAdapter()
+    url = "https://www.magazineluiza.com.br/celular-samsung-s25/p/abc123/te/gs25/?seller_id=samsung"
+    assert a.codigo_produto(url) == "abc123"
+    assert a.urls_base(url) == [
+        "https://www.magazineluiza.com.br/celular-samsung-s25/p/abc123/",
+        "https://www.magazineluiza.com.br/p/abc123/",
+    ]
+    # URL que já é só o caminho base não gera a mesma URL de novo
+    assert a.urls_base("https://www.magazineluiza.com.br/p/abc123/") == []
+    assert a.urls_base("https://www.magazineluiza.com.br/busca/s25/") == []
+    assert a.codigo_produto("https://www.magazineluiza.com.br/") is None
+
+
+def test_url_de_busca():
+    a = MagaluAdapter()
+    assert a.url_busca("Samsung Galaxy S25  256GB") == "https://www.magazineluiza.com.br/busca/Samsung%20Galaxy%20S25%20256GB/"
+    assert a.url_busca("  ") is None
+
+
+def test_parse_busca_deduplica_e_ignora_links_que_nao_sao_produto():
+    html = (FIXTURES / "magalu_busca.html").read_text(encoding="utf-8")
+    resultados = MagaluAdapter.parse_busca(html, "https://www.magazineluiza.com.br/busca/galaxy-s25/")
+    assert [r.url for r in resultados] == [
+        "https://www.magazineluiza.com.br/celular-samsung-galaxy-s25-ultra-5g-256gb/p/ultra001/te/g25u/",
+        "https://www.magazineluiza.com.br/samsung-galaxy-s25-5g-256gb-azul/p/novo25/te/gs25/",
+        "https://www.magazineluiza.com.br/celular-samsung-galaxy-a17-5g-128gb/p/a17x128/te/ga14/",
+    ]
+    assert resultados[1].titulo == "Samsung Galaxy S25 5G, 256GB, 12GB RAM"
+
+
 def test_roteamento_por_dominio():
     assert isinstance(adaptador_para("https://www.magazinevoce.com.br/loja/x/p/abc/"), MagaluAdapter)
     assert adaptador_para("https://www.amazon.com.br/dp/B0") is None

@@ -1,13 +1,32 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { BrowserRouter as Router, Routes, Route, NavLink } from "react-router-dom";
 import Home from "./pages/Home";
 import Reports from "./pages/Reports";
 import Links from "./pages/Links";
 import Prints from "./pages/Prints";
 import Curves from "./pages/Curves"; // nova rota
+import Review from "./pages/Review";
 import "./styles/global.css";
 
 export default function App() {
+  const [pendentes, setPendentes] = useState(0);
+
+  // Contador de links aguardando revisão, mostrado no menu.
+  useEffect(() => {
+    const contar = () =>
+      fetch("/api/revisoes")
+        .then((r) => r.json())
+        .then((j) => setPendentes(Array.isArray(j) ? j.length : 0))
+        .catch(() => {});
+    contar();
+    const t = setInterval(contar, 60000);
+    window.addEventListener("revisoes-changed", contar);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("revisoes-changed", contar);
+    };
+  }, []);
+
   useEffect(() => {
     // remove a chave da antiga tela de senha, se existir no navegador
     try {
@@ -60,6 +79,13 @@ export default function App() {
             >
               Links
             </NavLink>
+
+            <NavLink
+              to="/review"
+              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+            >
+              Revisão{pendentes > 0 ? ` (${pendentes})` : ""}
+            </NavLink>
           </nav>
 
           <footer>by Mateus Ticami</footer>
@@ -72,6 +98,7 @@ export default function App() {
             <Route path="/curves" element={<Curves />} />
             <Route path="/prints" element={<Prints />} />
             <Route path="/links" element={<Links />} />
+            <Route path="/review" element={<Review />} />
           </Routes>
         </main>
       </div>

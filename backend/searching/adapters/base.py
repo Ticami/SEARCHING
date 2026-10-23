@@ -1,6 +1,15 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 from ..core.validacao import Leitura
+
+
+@dataclass(frozen=True)
+class CandidatoBruto:
+    """Anúncio encontrado na busca da loja (ainda sem nota de confiança)."""
+
+    url: str
+    titulo: str
 
 
 class LojaAdapter(ABC):
@@ -19,3 +28,21 @@ class LojaAdapter(ABC):
     @abstractmethod
     def ler_cartao_1x(self, driver, timeout_s: float) -> str | None:
         """Lê o preço à vista no cartão de crédito (1x). Pode interagir com a página."""
+
+    # --- recuperação de links (opcional: lojas sem suporte devolvem vazio) ---
+
+    def codigo_produto(self, url: str) -> str | None:
+        """Identificador estável do produto dentro da URL (ex.: o trecho /p/<código>/ da Magalu)."""
+        return None
+
+    def urls_base(self, url: str) -> list[str]:
+        """URLs mais simples que costumam levar ao mesmo produto (sem parâmetros, só o caminho base)."""
+        return []
+
+    def url_busca(self, termo: str) -> str | None:
+        """URL da busca da própria loja para o termo."""
+        return None
+
+    def buscar(self, driver, termo: str, timeout_s: float) -> list[CandidatoBruto]:
+        """Abre a busca da loja e devolve os anúncios da primeira página."""
+        return []

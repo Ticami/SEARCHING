@@ -144,10 +144,11 @@ function RowLink({ row, onChanged }) {
   });
 
   const salvar = async () => {
-    await fetch("/api/links", {
+    const res = await fetch("/api/links", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        id: row.ID,
         originalNome: row["NOME COMERCIAL"],
         originalLink: row.LINK,
         originalLoja: row.LOJA,
@@ -156,6 +157,11 @@ function RowLink({ row, onChanged }) {
         loja: draft.loja,
       }),
     });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      window.alert(j.error || "Não foi possível salvar o link.");
+      return;
+    }
     setEdit(false);
     onChanged();
   };
@@ -164,7 +170,7 @@ function RowLink({ row, onChanged }) {
     await fetch("/api/links", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nome: row["NOME COMERCIAL"], link: row.LINK, loja: row.LOJA }),
+      body: JSON.stringify({ id: row.ID, nome: row["NOME COMERCIAL"], link: row.LINK, loja: row.LOJA }),
     });
     onChanged();
   };

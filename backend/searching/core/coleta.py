@@ -12,12 +12,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..adapters import adaptador_para
-from ..db.models import Coleta, Configuracao, Execucao, Produto
+from ..db import links as repo_links
+from ..db.models import Coleta, Configuracao, Execucao, Produto, RevisaoLink, TentativaRecuperacao
 from ..db.session import BACKEND_DIR, CONFIG_PADRAO
+from ..links.recuperacao import recuperar
 from .lojas import modelo_simples, normalizar, normalizar_loja
 from .navegador import Navegador
 from .precos import parse_preco_centavos
-from .status import StatusColeta
+from .status import STATUS_RECUPERAVEIS, StatusColeta
 from .trava import TravaColeta
 from .validacao import Leitura, classificar, eh_suspeito
 
@@ -101,6 +103,88 @@ def _ultimo_pix_valido(s: Session, produto_id: int) -> int | None:
     )
 
 
+def _status_final(s: Session, produto: Produto, resultado: Resultado, cfg: dict) -> tuple[StatusColeta, str]:
+    """Aplica a validação de sanidade (RF-09): variação grande demais vira SUSPEITO."""
+    if resultado.status == StatusColeta.OK and eh_suspeito(
+        resultado.pix_centavos, _ultimo_pix_valido(s, produto.id), float(cfg["variacao_suspeita_pct"])
+    ):
+        return StatusColeta.SUSPEITO, "variação acima do limite em relação à última coleta válida"
+    return resultado.status, resultado.detalhe
+
+
+def _salvar_coleta(s: Session, exec_id: int, produto: Produto, resultado: Resultado, status: StatusColeta, detalhe: str) -> None:
+    leitura = resultado.leitura
+    s.add(
+        Coleta(
+            execucao_id=exec_id,
+            produto_id=produto.id,
+            coletado_em=datetime.now(),
+            status=status.value,
+            titulo_lido=leitura.titulo if leitura else None,
+            vendedor=leitura.vendedor if leitura else None,
+            preco_pix_centavos=resultado.pix_centavos,
+            preco_cartao_1x_centavos=resultado.cartao_centavos,
+            texto_bruto={
+                "pix": leitura.pix_texto if leitura else None,
+                "cartao_1x": leitura.cartao_texto if leitura else None,
+                "url_final": leitura.url_final if leitura else None,
+            },
+            caminho_print=resultado.caminho_print,
+            erro_detalhe=detalhe or None,
+        )
+    )
+    s.commit()
+
+
+def _pode_recuperar(s: Session, produto: Produto, cfg: dict) -> bool:
+    """Respeita o limite diário de tentativas (RF-21) e não repete enquanto há revisão pendente."""
+    if cfg["recuperacao_automatica"] != "1":
+        return False
+    if s.scalar(select(RevisaoLink.id).where(RevisaoLink.produto_id == produto.id, RevisaoLink.estado == "pendente")):
+        return False
+    hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    feitas = len(
+        s.scalars(
+            select(TentativaRecuperacao.id).where(TentativaRecuperacao.produto_id == produto.id, TentativaRecuperacao.em >= hoje)
+        ).all()
+    )
+    return feitas < int(cfg["buscas_por_produto_dia"])
+
+
+def _recuperar_link(s, navegador, adaptador, produto, resultado, exec_id, cfg, pausar) -> str:
+    """Tenta achar o link novo. Devolve 'corrigido', 'revisao' ou 'bloqueada'."""
+    rec = recuperar(
+        navegador, adaptador, produto, resultado.leitura,
+        float(cfg["confianca_minima_autocorrecao"]), float(cfg["timeout_produto_s"]), pausar,
+    )
+    if rec.bloqueada:
+        return "bloqueada"  # sem registrar tentativa: a loja barrou, não houve busca de verdade
+    if rec.escolhido:
+        c = rec.escolhido
+        repo_links.trocar_url(
+            s, produto, c.url, f"recuperação automática ({resultado.status.value}, {c.estrategia})", "automatico", c.nota
+        )
+        s.add(TentativaRecuperacao(produto_id=produto.id, execucao_id=exec_id, estrategia=c.estrategia, resultado="corrigido"))
+        s.commit()
+        return "corrigido"
+    s.add(
+        RevisaoLink(
+            produto_id=produto.id,
+            execucao_id=exec_id,
+            motivo=resultado.status.value,
+            candidatos=[c.como_dict() for c in rec.candidatos],
+        )
+    )
+    s.add(
+        TentativaRecuperacao(
+            produto_id=produto.id, execucao_id=exec_id, estrategia=rec.estrategia,
+            resultado="revisao" if rec.candidatos else "sem_candidato",
+        )
+    )
+    s.commit()
+    return "revisao"
+
+
 def _selecionar(s: Session, stores, include, exclude) -> list[Produto]:
     lojas = {normalizar_loja(x) for x in (stores or [])}
     inc = {normalizar(modelo_simples(x)) for x in (include or []) if str(x).strip()}
@@ -151,6 +235,10 @@ def executar_coleta(
             limite_bloqueios = int(cfg["bloqueios_para_interromper"])
             bloqueios_seguidos: dict[str, int] = {}
             ja_pediu: list[bool] = []
+            extras = {"corrigidos": 0, "revisao": 0}
+
+            def pausar() -> None:
+                dormir(random.uniform(float(cfg["pausa_min_s"]), float(cfg["pausa_max_s"])))
 
             def processar(produto_id: int) -> bool:
                 """Coleta um produto. Devolve True se fez requisições à loja."""
@@ -174,7 +262,7 @@ def executar_coleta(
                     else:
                         # Pausa antes de pedir a página (nunca antes de produtos pulados nem do primeiro).
                         if ja_pediu:
-                            dormir(random.uniform(float(cfg["pausa_min_s"]), float(cfg["pausa_max_s"])))
+                            pausar()
                         ja_pediu.append(True)
                         for tentativa in range(retentativas + 1):
                             resultado = _coletar_uma_vez(navegador, adaptador, produto, cfg, pasta)
@@ -184,35 +272,27 @@ def executar_coleta(
                             log.info("[exec %s] %s: %s, nova tentativa em %.0fs", exec_id, produto.nome_comercial, resultado.status.value, espera)
                             dormir(espera)
 
-                    status, detalhe = resultado.status, resultado.detalhe
-                    if status == StatusColeta.OK and eh_suspeito(
-                        resultado.pix_centavos, _ultimo_pix_valido(s, produto.id), float(cfg["variacao_suspeita_pct"])
-                    ):
-                        status, detalhe = StatusColeta.SUSPEITO, "variação acima do limite em relação à última coleta válida"
-
-                    leitura = resultado.leitura
-                    s.add(
-                        Coleta(
-                            execucao_id=exec_id,
-                            produto_id=produto.id,
-                            coletado_em=datetime.now(),
-                            status=status.value,
-                            titulo_lido=leitura.titulo if leitura else None,
-                            vendedor=leitura.vendedor if leitura else None,
-                            preco_pix_centavos=resultado.pix_centavos,
-                            preco_cartao_1x_centavos=resultado.cartao_centavos,
-                            texto_bruto={
-                                "pix": leitura.pix_texto if leitura else None,
-                                "cartao_1x": leitura.cartao_texto if leitura else None,
-                                "url_final": leitura.url_final if leitura else None,
-                            },
-                            caminho_print=resultado.caminho_print,
-                            erro_detalhe=detalhe or None,
-                        )
-                    )
-                    s.commit()
-                    contagem[status.value] = contagem.get(status.value, 0) + 1
+                    status, detalhe = _status_final(s, produto, resultado, cfg)
+                    _salvar_coleta(s, exec_id, produto, resultado, status, detalhe)
                     log.info("[exec %s] %s -> %s %s", exec_id, produto.nome_comercial, status.value, detalhe)
+
+                    if fez_requisicao and adaptador is not None and resultado.status in STATUS_RECUPERAVEIS and _pode_recuperar(s, produto, cfg):
+                        desfecho = _recuperar_link(s, navegador, adaptador, produto, resultado, exec_id, cfg, pausar)
+                        log.info("[exec %s] %s: recuperação de link -> %s", exec_id, produto.nome_comercial, desfecho)
+                        if desfecho == "corrigido":
+                            pausar()
+                            resultado = _coletar_uma_vez(navegador, adaptador, produto, cfg, pasta)  # refaz a coleta
+                            status, detalhe = _status_final(s, produto, resultado, cfg)
+                            _salvar_coleta(s, exec_id, produto, resultado, status, detalhe)
+                            extras["corrigidos"] += 1
+                            log.info("[exec %s] %s (link novo) -> %s %s", exec_id, produto.nome_comercial, status.value, detalhe)
+                        elif desfecho == "revisao":
+                            extras["revisao"] += 1
+                        elif desfecho == "bloqueada":
+                            status = StatusColeta.BLOQUEIO
+                            detalhe = "loja bloqueou durante a recuperação do link"
+
+                    contagem[status.value] = contagem.get(status.value, 0) + 1
                     if fez_requisicao and adaptador is not None:
                         if status == StatusColeta.BLOQUEIO:
                             bloqueios_seguidos[loja] = bloqueios_seguidos.get(loja, 0) + 1
@@ -235,12 +315,16 @@ def executar_coleta(
                 execucao.finalizada_em = datetime.now()
                 execucao.ok = contagem.get(StatusColeta.OK.value, 0)
                 execucao.falhas = sum(contagem.values()) - execucao.ok
+                execucao.links_corrigidos = extras["corrigidos"]
+                execucao.em_revisao = extras["revisao"]
                 s.commit()
                 resumo = {
                     "execucao_id": exec_id,
                     "total": execucao.total,
                     "ok": execucao.ok,
                     "falhas": execucao.falhas,
+                    "links_corrigidos": execucao.links_corrigidos,
+                    "em_revisao": execucao.em_revisao,
                     "por_status": contagem,
                     "pasta": execucao.iniciada_em.strftime("%Y-%m-%d"),
                 }
