@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 import os
 import re
@@ -7,10 +7,11 @@ from datetime import datetime
 
 import subprocess
 import sys
+from io import BytesIO
 
 from sqlalchemy import select
 
-from searching import agendamento
+from searching import agendamento, relatorios
 from searching.alerts import config as alertas_config
 from searching.alerts import email as alertas_email
 from searching.alerts import regras as alertas_regras
@@ -155,11 +156,7 @@ def _revisao_json(s, r):
     ultima = s.scalars(
         select(Coleta).where(Coleta.produto_id == p.id).order_by(Coleta.coletado_em.desc()).limit(1)
     ).first()
-    print_url = None
-    if ultima and ultima.caminho_print:
-        partes = ultima.caminho_print.replace("\\", "/").split("/")
-        if len(partes) >= 2:
-            print_url = f"/api/prints/{partes[-2]}/{partes[-1]}"
+    print_url = relatorios.print_url(ultima.caminho_print) if ultima else None
     return {
         "id": r.id,
         "produto": {"id": p.id, "nome": p.nome_comercial, "loja": p.loja, "url_atual": p.url_atual, "ativo": p.ativo},
@@ -219,38 +216,48 @@ def get_print(pasta, filename):
 
 @app.route("/api/historico", methods=["GET"])
 def listar_historico():
-    """
-    Retorna o histórico de coletas no formato JSON.
-    Garante compatibilidade com as novas colunas 'SITE' e 'ENTREGUE_POR'.
-    """
+    """Histórico de coletas. Filtros opcionais: de, ate (AAAA-MM-DD), loja, produto_id, status."""
     try:
         with db_fabrica() as s:
-            linhas = s.execute(
-                select(Coleta, Produto).join(Produto, Coleta.produto_id == Produto.id).order_by(Coleta.coletado_em)
-            ).all()
-            dados = []
-            for c, p in linhas:
-                dados.append({
-                    "DATA": c.coletado_em.strftime("%Y-%m-%d %H:%M:%S"),
-                    "NOME": p.nome_comercial,
-                    "MODELO": c.titulo_lido or p.nome_comercial,
-                    "SITE": p.loja,
-                    "ENTREGUE_POR": c.vendedor or "",
-                    "PIX": formatar_brl(c.preco_pix_centavos) if c.preco_pix_centavos is not None else "",
-                    "CREDITO": formatar_brl(c.preco_cartao_1x_centavos) if c.preco_cartao_1x_centavos is not None else "",
-                    "STATUS": c.status,
-                    "LINK": p.url_atual,
-                    "PRODUTO_ID": p.id,
-                    "PIX_CENTAVOS": c.preco_pix_centavos,
-                    "CREDITO_CENTAVOS": c.preco_cartao_1x_centavos,
-                    "ERRO_DETALHE": c.erro_detalhe or "",
-                    "PRINT": c.caminho_print or "",
-                })
-        return jsonify(dados)
+            return jsonify(relatorios.historico(
+                s, de=request.args.get("de"), ate=request.args.get("ate"), loja=request.args.get("loja"),
+                produto_id=request.args.get("produto_id", type=int), status=request.args.get("status"),
+            ))
+    except ValueError:
+        return jsonify({"error": "Datas devem estar no formato AAAA-MM-DD"}), 400
 
-    except Exception as e:
-        print(f"[ERRO] Falha ao ler histórico: {e}")
-        return jsonify([])
+@app.route("/api/historico/exportar", methods=["POST"])
+def exportar_historico():
+    """Excel das coletas pedidas (ids), com preços numéricos e o caminho do print."""
+    data = request.get_json(force=True, silent=True) or {}
+    ids = [int(i) for i in data.get("ids", []) if str(i).isdigit()]
+    try:
+        with db_fabrica() as s:
+            conteudo = relatorios.exportar_excel(s, ids)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    nome = f"relatorio_{datetime.now():%Y%m%d_%H%M}.xlsx"
+    return send_file(
+        BytesIO(conteudo), as_attachment=True, download_name=nome,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+@app.route("/api/prints-galeria", methods=["GET"])
+def galeria_de_prints():
+    """Prints ligados às coletas, com o preço da hora. Sem parâmetros devolve as datas disponíveis."""
+    data, produto_id = request.args.get("data"), request.args.get("produto_id", type=int)
+    try:
+        with db_fabrica() as s:
+            if not data and not produto_id:
+                return jsonify({"datas": relatorios.datas_com_prints(s)})
+            return jsonify({"itens": relatorios.galeria(s, data=data, produto_id=produto_id)})
+    except ValueError:
+        return jsonify({"error": "Data deve estar no formato AAAA-MM-DD"}), 400
+
+@app.route("/api/saude", methods=["GET"])
+def painel_de_saude():
+    with db_fabrica() as s:
+        return jsonify(relatorios.saude(s))
 
 
 # ==============================

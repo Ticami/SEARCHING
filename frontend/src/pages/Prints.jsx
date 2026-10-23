@@ -1,67 +1,57 @@
 import React, { useEffect, useState } from "react";
 
+const fmtDia = (iso) => {
+  const [y, m, d] = String(iso).split("-");
+  return y && m && d ? `${d}/${m}/${y}` : iso;
+};
+
+const fmtHora = (iso) =>
+  iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
+
 export default function Prints() {
-  const [pastas, setPastas] = useState([]);
-  const [imagens, setImagens] = useState([]);
-  const [selecionada, setSelecionada] = useState("");
+  const [modo, setModo] = useState("data"); // "data" | "produto"
+  const [datas, setDatas] = useState([]);
+  const [produtos, setProdutos] = useState([]);
+  const [dataSel, setDataSel] = useState("");
+  const [produtoSel, setProdutoSel] = useState("");
+  const [itens, setItens] = useState([]);
+  const [carregando, setCarregando] = useState(false);
   const [modalImg, setModalImg] = useState("");
-  const [mes, setMes] = useState("");
-  const [ano, setAno] = useState("");
-
-  const carregarPastas = async () => {
-    try {
-      const res = await fetch("/api/prints-list");
-      const json = await res.json();
-      setPastas(json);
-    } catch (err) {
-      console.error("Erro ao carregar pastas:", err);
-    }
-  };
-
-  const carregarImagens = async (pasta) => {
-    try {
-      const res = await fetch(`/api/prints-list/${pasta}`);
-      const imgs = await res.json();
-      setImagens(imgs);
-      setSelecionada(pasta);
-    } catch {
-      setImagens([]);
-    }
-  };
 
   useEffect(() => {
-    carregarPastas();
+    fetch("/api/prints-galeria")
+      .then((r) => r.json())
+      .then((j) => setDatas(Array.isArray(j.datas) ? j.datas : []))
+      .catch(() => setDatas([]));
+    fetch("/api/links")
+      .then((r) => r.json())
+      .then((j) => setProdutos(Array.isArray(j) ? j : []))
+      .catch(() => setProdutos([]));
   }, []);
 
-  const parsePastaDate = (p) => {
-    const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})_([0-9]{2})-([0-9]{2})-([0-9]{2})$/.exec(p);
-    if (!m) return null;
-    const [_, yy, mm, dd, hh, mi] = m;
-    return { y: Number(yy), m: Number(mm), d: Number(dd), hh: Number(hh), mi: Number(mi) };
+  const carregar = async (query) => {
+    setCarregando(true);
+    try {
+      const res = await fetch(`/api/prints-galeria?${query}`);
+      const j = await res.json();
+      setItens(Array.isArray(j.itens) ? j.itens : []);
+    } catch {
+      setItens([]);
+    } finally {
+      setCarregando(false);
+    }
   };
 
-  const labelBR = (p) => {
-    const d = parsePastaDate(p);
-    if (!d) return p;
-    const yy2 = String(d.y).slice(-2);
-    const dd = String(d.d).padStart(2, "0");
-    const mm = String(d.m).padStart(2, "0");
-    const hh = String(d.hh).padStart(2, "0");
-    const mi = String(d.mi).padStart(2, "0");
-    return `${dd}/${mm}/${yy2} ${hh}:${mi}`;
+  const escolherData = (d) => {
+    setDataSel(d);
+    carregar(`data=${encodeURIComponent(d)}`);
   };
 
-  const anosDisponiveis = Array.from(new Set(pastas.map((p) => parsePastaDate(p)?.y).filter(Boolean))).sort(
-    (a, b) => b - a
-  );
-
-  const pastasFiltradas = pastas.filter((p) => {
-    const d = parsePastaDate(p);
-    if (!d) return true;
-    const condMes = mes ? d.m === Number(mes) : true;
-    const condAno = ano ? d.y === Number(ano) : true;
-    return condMes && condAno;
-  });
+  const escolherProduto = (id) => {
+    setProdutoSel(id);
+    if (id) carregar(`produto_id=${id}`);
+    else setItens([]);
+  };
 
   useEffect(() => {
     const onKey = (e) => {
@@ -77,13 +67,11 @@ export default function Prints() {
     };
   }, [modalImg]);
 
-  const imgUrl = (pasta, img) => `/api/prints/${pasta}/${img}`;
-  const deviceNameFromFilename = (filename) => {
-    if (!filename) return "";
-    const base = filename.replace(/\.(png|jpe?g)$/i, "");
-    const timeMatch = base.match(/(.+)_\d{2}-\d{2}-\d{2}$/);
-    const rawName = timeMatch ? timeMatch[1] : base;
-    return rawName.replace(/_/g, " ").trim();
+  const trocarModo = (m) => {
+    setModo(m);
+    setItens([]);
+    setDataSel("");
+    setProdutoSel("");
   };
 
   return (
@@ -94,55 +82,65 @@ export default function Prints() {
             <span className="eyebrow">Galeria</span>
             <h2>Prints</h2>
           </div>
-        </div>
-
-        <div className="toolbar" style={{ marginBottom: 12 }}>
-          <select value={mes} onChange={(e) => setMes(e.target.value)}>
-            <option value="">Mês (todos)</option>
-            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-          <select value={ano} onChange={(e) => setAno(e.target.value)}>
-            <option value="">Ano (todos)</option>
-            {anosDisponiveis.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="folders">
-          {pastas.length === 0 && <p>Nenhuma coleta encontrada.</p>}
-          {pastasFiltradas.map((p, i) => (
-            <button
-              key={i}
-              className={`btn chip ${p === selecionada ? "chip-active" : ""}`}
-              onClick={() => carregarImagens(p)}
-            >
-              {labelBR(p)}
+          <div className="toolbar">
+            <button className={`btn chip ${modo === "data" ? "chip-active" : ""}`} onClick={() => trocarModo("data")}>
+              Por data
             </button>
-          ))}
+            <button className={`btn chip ${modo === "produto" ? "chip-active" : ""}`} onClick={() => trocarModo("produto")}>
+              Por produto
+            </button>
+          </div>
         </div>
 
-        {selecionada && (
+        {modo === "data" && (
+          <div className="folders">
+            {datas.length === 0 && <p>Nenhuma coleta com print encontrada.</p>}
+            {datas.map((d) => (
+              <button
+                key={d.data}
+                className={`btn chip ${d.data === dataSel ? "chip-active" : ""}`}
+                onClick={() => escolherData(d.data)}
+              >
+                {fmtDia(d.data)} · {d.com_print}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {modo === "produto" && (
+          <div className="toolbar" style={{ marginBottom: 12 }}>
+            <select value={produtoSel} onChange={(e) => escolherProduto(e.target.value)}>
+              <option value="">Escolha um produto</option>
+              {produtos.map((p) => (
+                <option key={p.ID} value={p.ID}>
+                  {p["NOME COMERCIAL"]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {(dataSel || produtoSel) && (
           <div className="gallery">
             <div className="gallery-header">
-              <h3>{labelBR(selecionada)}</h3>
-              <span className="muted">{imagens.length} imagem(ns)</span>
+              <h3>{modo === "data" ? fmtDia(dataSel) : produtos.find((p) => String(p.ID) === String(produtoSel))?.["NOME COMERCIAL"]}</h3>
+              <span className="muted">{carregando ? "Carregando..." : `${itens.length} print(s)`}</span>
             </div>
             <div className="gallery-grid">
-              {imagens.map((img, i) => (
-                <figure key={i} className="thumb">
-                  <div className="thumb-title" title={deviceNameFromFilename(img)}>
-                    {deviceNameFromFilename(img)}
+              {itens.map((it) => (
+                <figure key={it.id} className="thumb">
+                  <div className="thumb-title" title={it.produto}>
+                    {modo === "data" ? it.produto : fmtHora(it.coletado_em)}
                   </div>
-                  <img src={imgUrl(selecionada, img)} alt={img} onClick={() => setModalImg(imgUrl(selecionada, img))} />
-                  <figcaption className="thumb-actions">
-                    <a href={imgUrl(selecionada, img)} download>
+                  <img src={it.print_url} alt={it.produto} onClick={() => setModalImg(it.print_url)} />
+                  <figcaption className="thumb-actions" style={{ display: "block" }}>
+                    <div>{it.pix ? <strong>PIX {it.pix}</strong> : <span className="muted">Sem preço</span>}</div>
+                    {it.cartao_1x && <div className="muted">Cartão 1x {it.cartao_1x}</div>}
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {modo === "data" ? fmtHora(it.coletado_em) : null}
+                      {it.status !== "OK" ? ` ${modo === "data" ? "· " : ""}${it.status.replaceAll("_", " ")}` : ""}
+                    </div>
+                    <a href={it.print_url} download>
                       Baixar
                     </a>
                   </figcaption>

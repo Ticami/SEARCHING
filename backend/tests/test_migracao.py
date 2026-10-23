@@ -28,7 +28,7 @@ def _arquivos(tmp_path):
 
 def test_migracao_converte_precos_e_corrige_status(tmp_path):
     links, hist, db = _arquivos(tmp_path)
-    resumo = migrar(links, hist, db)
+    resumo = migrar(links, hist, db, prints_dir=tmp_path / "prints")
 
     assert resumo["links"] == {"criados": 2, "existentes": 0, "duplicados_no_csv": 1}
     assert resumo["historico"]["coletas"] == 5
@@ -55,8 +55,8 @@ def test_migracao_converte_precos_e_corrige_status(tmp_path):
 
 def test_migracao_e_idempotente(tmp_path):
     links, hist, db = _arquivos(tmp_path)
-    migrar(links, hist, db)
-    segunda = migrar(links, hist, db)
+    migrar(links, hist, db, prints_dir=tmp_path / "prints")
+    segunda = migrar(links, hist, db, prints_dir=tmp_path / "prints")
 
     assert segunda["links"]["criados"] == 0
     assert segunda["historico"]["coletas"] == 0
@@ -68,3 +68,23 @@ def test_migracao_e_idempotente(tmp_path):
         execs = s.scalars(select(Execucao).order_by(Execucao.iniciada_em)).all()
         assert [e.total for e in execs] == [2, 1, 1, 1]
         assert all(e.origem == "legado" for e in execs)
+
+
+def test_prints_antigos_sao_vinculados_as_coletas_certas(tmp_path):
+    links, hist, db = _arquivos(tmp_path)
+    pasta = tmp_path / "prints" / "2025-12-08_16-19-01"
+    pasta.mkdir(parents=True)
+    # print tirado 2 s antes da coleta do S25 (16:19:12) e outro do A17 (16:19:16)
+    for nome in ("Samsung Galaxy S25 256GB_16-19-10.png", "Samsung Galaxy A17 5G 128GB_16-19-14.png", "Modelo Desconhecido_16-19-10.png", "lixo.txt"):
+        (pasta / nome).write_bytes(b"png")
+
+    resumo = migrar(links, hist, db, prints_dir=tmp_path / "prints")
+    assert resumo["prints_vinculados"] == 2
+
+    with iniciar_banco(criar_engine(db))() as s:
+        por_produto = {c.produto.nome_comercial: c.caminho_print for c in s.scalars(select(Coleta)) if c.caminho_print}
+        assert por_produto == {
+            "Samsung Galaxy S25 256GB": "prints/2025-12-08_16-19-01/Samsung Galaxy S25 256GB_16-19-10.png",
+            "Samsung Galaxy A17 5G 128GB": "prints/2025-12-08_16-19-01/Samsung Galaxy A17 5G 128GB_16-19-14.png",
+        }
+    assert migrar(links, hist, db, prints_dir=tmp_path / "prints")["prints_vinculados"] == 0  # idempotente

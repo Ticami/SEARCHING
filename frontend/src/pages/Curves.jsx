@@ -8,6 +8,8 @@ export default function Curves() {
 
   const [modeloSelecionado, setModeloSelecionado] = useState("");
   const [lojaSelecionada, setLojaSelecionada] = useState("TODAS");
+  const [de, setDe] = useState(""); // período: AAAA-MM-DD
+  const [ate, setAte] = useState("");
 
   const simplifyModelo = (s) => {
     if (!s) return s;
@@ -67,7 +69,7 @@ export default function Curves() {
   }, []);
 
   const modelos = useMemo(() => {
-    const nomes = dados.map((d) => d.MODELO || d.NOME || "").filter((x) => x && x.trim() !== "");
+    const nomes = dados.map((d) => d.NOME || d.MODELO || "").filter((x) => x && x.trim() !== "");
     const uniq = Array.from(new Set(nomes.map(simplifyModelo)));
     return uniq.sort((a, b) => a.localeCompare(b));
   }, [dados]);
@@ -85,7 +87,10 @@ export default function Curves() {
 
     const filtrados = dados
       .filter((d) => {
-        const modeloBruto = d.MODELO || d.NOME || "";
+        const modeloBruto = d.NOME || d.MODELO || "";
+        if (d.STATUS && d.STATUS !== "OK") return false; // leituras suspeitas ou com falha não entram na curva
+        const dia = (d.DATA || "").split(" ")[0];
+        if ((de && dia < de) || (ate && dia > ate)) return false;
         const modeloSimples = simplifyModelo(modeloBruto);
         if (modeloSimples !== modeloBase) return false;
 
@@ -103,15 +108,15 @@ export default function Curves() {
           dataLabel: formatDateBR(d.DATA),
           dataSort: parseDate(d.DATA).getTime(),
           loja: d.SITE || d.LOJA || "",
-          pix: parseMoneyBR(pixRaw),
-          credito: parseMoneyBR(credRaw),
+          pix: d.PIX_CENTAVOS != null ? d.PIX_CENTAVOS / 100 : parseMoneyBR(pixRaw),
+          credito: d.CREDITO_CENTAVOS != null ? d.CREDITO_CENTAVOS / 100 : parseMoneyBR(credRaw),
         };
       })
       .filter((r) => r.pix != null || r.credito != null)
       .sort((a, b) => a.dataSort - b.dataSort);
 
     return filtrados;
-  }, [dados, modeloSelecionado, lojaSelecionada, modelos]);
+  }, [dados, modeloSelecionado, lojaSelecionada, modelos, de, ate]);
 
   const modeloMostrando = modeloSelecionado || (modelos.length ? modelos[0] : "");
 
@@ -148,6 +153,16 @@ export default function Curves() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="input-label">De</label>
+              <input type="date" value={de} max={ate || undefined} onChange={(e) => setDe(e.target.value)} />
+            </div>
+
+            <div>
+              <label className="input-label">Até</label>
+              <input type="date" value={ate} min={de || undefined} onChange={(e) => setAte(e.target.value)} />
             </div>
           </div>
         </div>
