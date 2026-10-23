@@ -3,13 +3,15 @@
 Uso (a partir de backend/):  python -m searching.db.migracao_csv
 """
 import csv
-from datetime import datetime, timedelta
+import re
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core.atributos import extrair_atributos
+from ..core.lojas import modelo_simples, normalizar
 from ..core.precos import parse_preco_centavos
 from ..core.status import StatusColeta
 from .models import Coleta, Execucao, Produto
@@ -80,6 +82,48 @@ def importar_se_vazio(fabrica, links_csv: Path | None = None, historico_csv: Pat
             return False
     migrar(links_csv, historico_csv, fabrica=fabrica)
     return True
+
+
+_PRINT_RE = re.compile(r"^(?P<nome>.+)_(?P<h>\d{2})-(?P<m>\d{2})-(?P<s>\d{2})\.png$", re.IGNORECASE)
+_PASTA_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})(?:_\d{2}-\d{2}-\d{2})?$")
+# O print era tirado antes da leitura dos preços; a coleta correspondente é gravada logo depois.
+JANELA_PRINT_LEGADO = timedelta(seconds=120)
+
+
+def vincular_prints_legados(s: Session, prints_dir: Path) -> int:
+    """Associa os prints antigos (pasta AAAA-MM-DD_HH-MM-SS/<modelo>_HH-MM-SS.png) às coletas migradas."""
+    if not prints_dir.is_dir():
+        return 0
+    vinculados = 0
+    produtos_por_modelo: dict[str, list[int]] = {}
+    for p in s.scalars(select(Produto)):
+        produtos_por_modelo.setdefault(normalizar(modelo_simples(p.nome_comercial)), []).append(p.id)
+
+    for pasta in sorted(d for d in prints_dir.iterdir() if d.is_dir()):
+        mp = _PASTA_RE.match(pasta.name)
+        if not mp:
+            continue
+        dia = date(int(mp.group(1)), int(mp.group(2)), int(mp.group(3)))
+        for arquivo in sorted(pasta.glob("*.png")):
+            m = _PRINT_RE.match(arquivo.name)
+            ids = produtos_por_modelo.get(normalizar(m.group("nome"))) if m else None
+            if not ids:
+                continue
+            hora = datetime.combine(dia, time(int(m.group("h")), int(m.group("m")), int(m.group("s"))))
+            candidatas = s.scalars(
+                select(Coleta)
+                .where(
+                    Coleta.produto_id.in_(ids),
+                    Coleta.caminho_print.is_(None),
+                    Coleta.coletado_em >= hora,
+                    Coleta.coletado_em <= hora + JANELA_PRINT_LEGADO,
+                )
+                .order_by(Coleta.coletado_em)
+            ).all()
+            if candidatas:
+                candidatas[0].caminho_print = f"prints/{pasta.name}/{arquivo.name}"
+                vinculados += 1
+    return vinculados
 
 
 def _status_legado(status_csv: str, pix: int | None) -> tuple[str, str | None]:
@@ -169,7 +213,7 @@ def migrar_historico(s: Session, linhas: list[dict[str, str]]) -> dict[str, int]
     return resumo
 
 
-def migrar(links_csv: Path | None = None, historico_csv: Path | None = None, db: str | Path | None = None, fabrica=None) -> dict:
+def migrar(links_csv: Path | None = None, historico_csv: Path | None = None, db: str | Path | None = None, fabrica=None, prints_dir: Path | None = None) -> dict:
     links_csv = links_csv or BACKEND_DIR / "links.csv"
     historico_csv = historico_csv or BACKEND_DIR / "data" / "historico.csv"
     fabrica = fabrica or iniciar_banco(criar_engine(db))
@@ -178,6 +222,7 @@ def migrar(links_csv: Path | None = None, historico_csv: Path | None = None, db:
             "links": migrar_links(s, _ler_csv(links_csv)),
             "historico": migrar_historico(s, _ler_csv(historico_csv)),
         }
+        resumo["prints_vinculados"] = vincular_prints_legados(s, prints_dir or BACKEND_DIR / "prints")
         s.commit()
     return resumo
 

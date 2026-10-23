@@ -151,3 +151,50 @@ def test_email_de_teste_pela_api(api, monkeypatch):
     monkeypatch.setattr(server.alertas_servico, "enviar_teste", lambda: (False, "ConfigEmailIncompleta: faltam SMTP_USER"))
     r = c.post("/api/alertas/teste")
     assert r.status_code == 500 and "SMTP_USER" in r.get_json()["message"]
+
+
+# ---------- relatórios ----------
+def _com_coletas(c, server):
+    pid = _criar(c)
+    with server.db_fabrica() as s:
+        s.add(Coleta(produto_id=pid, coletado_em=datetime(2026, 10, 21, 12, 0), status="OK", preco_pix_centavos=400000, caminho_print="prints/2026-10-21/Samsung Galaxy S25 256GB_12-00-00.png"))
+        s.add(Coleta(produto_id=pid, coletado_em=datetime(2026, 10, 22, 12, 0), status="OK", preco_pix_centavos=380000))
+        s.commit()
+    return pid
+
+
+def test_historico_aceita_filtros_por_periodo(api):
+    c, server = api
+    _com_coletas(c, server)
+    assert len(c.get("/api/historico").get_json()) == 2
+    assert len(c.get("/api/historico?de=2026-10-22").get_json()) == 1
+    assert len(c.get("/api/historico?ate=2026-10-21&loja=Magazine Luiza").get_json()) == 1
+    assert c.get("/api/historico?de=22/10/2026").status_code == 400
+
+
+def test_exportar_excel_pela_api(api):
+    from io import BytesIO
+    from openpyxl import load_workbook
+
+    c, server = api
+    _com_coletas(c, server)
+    ids = [l["ID"] for l in c.get("/api/historico").get_json()]
+    r = c.post("/api/historico/exportar", json={"ids": ids})
+    assert r.status_code == 200 and "spreadsheetml" in r.content_type
+    assert ".xlsx" in r.headers["Content-Disposition"]
+    ws = load_workbook(BytesIO(r.data)).active
+    assert ws.max_row == 3 and ws["G2"].value == 4000
+    assert c.post("/api/historico/exportar", json={"ids": []}).status_code == 400
+
+
+def test_galeria_de_prints_e_painel_de_saude(api):
+    c, server = api
+    pid = _com_coletas(c, server)
+    assert c.get("/api/prints-galeria").get_json()["datas"] == [{"data": "2026-10-21", "total": 1, "com_print": 1}]
+    item = c.get("/api/prints-galeria?data=2026-10-21").get_json()["itens"][0]
+    assert item["pix"] == "R$ 4.000,00" and item["print_url"] == "/api/prints/2026-10-21/Samsung%20Galaxy%20S25%20256GB_12-00-00.png"
+    assert c.get(f"/api/prints-galeria?produto_id={pid}").get_json()["itens"][0]["produto_id"] == pid
+    assert c.get("/api/prints-galeria?data=hoje").status_code == 400
+
+    saude = c.get("/api/saude").get_json()
+    assert saude["periodo_dias"] == 7 and saude["links_em_revisao"] == 0 and saude["alertas"] == {"enviados": 0, "falhos": 0}

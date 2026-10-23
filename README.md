@@ -2,7 +2,7 @@
 
 Monitor de preços com evidência em print. Abre o link de cada produto em lojas concorrentes, coleta os preços, tira um print da página e guarda o histórico.
 
-> Projeto em evolução. Já tem banco SQLite, coleta agendada pelo Windows, recuperação automática de links com fila de revisão e alertas de queda por e-mail. Os relatórios ainda estão sendo migrados para o banco.
+> Projeto em evolução. Já tem banco SQLite, coleta agendada pelo Windows, recuperação automática de links com fila de revisão e alertas de queda por e-mail. Relatórios, curvas, galeria de prints e painel de saúde leem do banco.
 
 ## Como surgiu
 
@@ -59,6 +59,13 @@ A coleta diária roda pelo Agendador de Tarefas do Windows e não depende do ser
 - Se o computador estiver desligado ou dormindo no horário, a tarefa roda assim que possível depois.
 - A tarefa roda com o seu usuário, com a sessão aberta (o Chrome abre visível). Os filtros de loja e modelo do modo automático ficam em `backend/config.json`.
 - A tela Home mostra se a tarefa está instalada, a próxima execução e o resultado da última.
+
+## Relatórios, prints e saúde
+
+- **Relatórios:** filtros por loja, modelo, vendedor, data e período (de/até). **Exportar Excel** gera uma planilha das linhas filtradas, com preços numéricos e o caminho do print. O CSV continua disponível.
+- **Curvas:** gráfico de preço por modelo e loja, só com coletas válidas, com filtro de período.
+- **Prints:** galeria por data ou por produto, com o preço PIX e do cartão coletados naquele momento ao lado de cada print.
+- **Home:** painel de saúde dos últimos 7 dias com a taxa de sucesso por loja, falhas por motivo, links aguardando revisão e alertas enviados.
 
 ## Alertas de preço por e-mail
 

@@ -14,6 +14,8 @@ export default function Reports() {
   const [modelosSelecionados, setModelosSelecionados] = useState([]);
   const [lojasSelecionadas, setLojasSelecionadas] = useState([]);
   const [entreguesSelecionados, setEntreguesSelecionados] = useState([]);
+  const [de, setDe] = useState(""); // período: AAAA-MM-DD
+  const [ate, setAte] = useState("");
   const [editingIndex, setEditingIndex] = useState(null);
   const [draftLink, setDraftLink] = useState("");
   const [salvandoLink, setSalvandoLink] = useState(false);
@@ -119,8 +121,9 @@ export default function Reports() {
     const modeloMatch = modelosSelecionados.length === 0 || modelosSelecionados.includes(modeloAtual);
     const lojaMatch = lojasSelecionadas.length === 0 || lojasSelecionadas.includes(lojaAtual);
     const entregueMatch = entreguesSelecionados.length === 0 || entreguesSelecionados.includes(entregueAtual);
+    const periodoMatch = (!de || dataRaw >= de) && (!ate || dataRaw <= ate);
 
-    return dataMatch && modeloMatch && lojaMatch && entregueMatch;
+    return dataMatch && modeloMatch && lojaMatch && entregueMatch && periodoMatch;
   });
 
   useEffect(() => {
@@ -236,6 +239,36 @@ export default function Reports() {
     URL.revokeObjectURL(url);
   };
 
+  // Excel gerado pelo servidor: preços numéricos e caminho do print, só das linhas filtradas.
+  const exportarExcel = async () => {
+    const ids = filtrados.map((d) => d.ID).filter(Boolean);
+    if (ids.length === 0) {
+      setStatusMsg("Nenhuma linha para exportar.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/historico/exportar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setStatusMsg(j.error || "Falha ao exportar.");
+        return;
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `relatorio_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatusMsg(`${ids.length} linha(s) exportada(s).`);
+    } catch (e) {
+      setStatusMsg("Erro ao exportar para Excel.");
+    }
+  };
+
   const renderFilterMenu = (tipo, valores, selecionados, setSelecionados, labelFn) => {
     if (filterOpen !== tipo) return null;
     return (
@@ -288,14 +321,36 @@ export default function Reports() {
             <button className="btn" onClick={carregar}>
               Atualizar
             </button>
-            <button className="btn primary" onClick={exportarCSV}>
+            <button className="btn" onClick={exportarCSV}>
               Exportar CSV
+            </button>
+            <button className="btn primary" onClick={exportarExcel}>
+              Exportar Excel
             </button>
           </div>
         </div>
         {statusMsg && <p className="status">{statusMsg}</p>}
 
         <div className="card ghost stack" style={{ marginBottom: 12 }}>
+          <div className="toolbar">
+            <span className="muted" style={{ fontSize: 13 }}>
+              Período
+            </span>
+            <input type="date" value={de} max={ate || undefined} onChange={(e) => setDe(e.target.value)} />
+            <span className="muted">até</span>
+            <input type="date" value={ate} min={de || undefined} onChange={(e) => setAte(e.target.value)} />
+            {(de || ate) && (
+              <button
+                className="btn ghost"
+                onClick={() => {
+                  setDe("");
+                  setAte("");
+                }}
+              >
+                Limpar período
+              </button>
+            )}
+          </div>
           <p className="note">Ative/desative as colunas que deseja ver/exportar.</p>
           <div className="toolbar">
             {Object.keys(cols).map((k) => (
@@ -424,7 +479,7 @@ export default function Reports() {
                         <td>{item.ENTREGUE_POR || ""}</td>
                       </>
                     )}
-                    {cols.PIX && <td className="price">{erro ? "Erro" : normMoney(item.PIX)}</td>}
+                    {cols.PIX && <td className="price">{erro ? (item.STATUS && item.STATUS !== "OK" ? item.STATUS.replaceAll("_", " ") : "Erro") : normMoney(item.PIX)}</td>}
                     {cols.CREDITO && (
                       <td className="price">
                         {editando ? (

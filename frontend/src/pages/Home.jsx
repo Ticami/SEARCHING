@@ -17,6 +17,14 @@ export default function Home() {
   const [autoSelecionados, setAutoSelecionados] = useState([]);
   const [timeDraft, setTimeDraft] = useState(""); // "HH:MM"
   const [agenda, setAgenda] = useState(null); // { tarefa, ultima_execucao, comando }
+  const [saude, setSaude] = useState(null); // painel de saúde dos últimos 7 dias
+
+  useEffect(() => {
+    fetch("/api/saude")
+      .then((r) => r.json())
+      .then(setSaude)
+      .catch(() => setSaude(null));
+  }, []);
 
   const fmtData = (iso) => {
     if (!iso) return "—";
@@ -260,6 +268,53 @@ export default function Home() {
         </div>
         {status && <p className="status mt-2">{status}</p>}
       </section>
+
+      {/* ======= PAINEL DE SAÚDE ======= */}
+      {saude && (
+        <div className="card wide stack">
+          <div className="card-title">
+            <span className="eyebrow">Saúde</span>
+            <h3>Últimos {saude.periodo_dias} dias</h3>
+          </div>
+          <div className="grid-2">
+            <div className="stack">
+              <strong>Taxa de sucesso por loja</strong>
+              {saude.lojas.length === 0 && <span className="muted">Nenhuma coleta no período.</span>}
+              {saude.lojas.map((l) => (
+                <div key={l.loja} className="row" style={{ justifyContent: "space-between" }}>
+                  <span>{l.loja}</span>
+                  <span>
+                    <strong>{String(l.taxa_sucesso).replace(".", ",")}%</strong>{" "}
+                    <span className="muted">
+                      ({l.ok}/{l.total})
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="stack">
+              <strong>Atenção</strong>
+              <span>
+                Links aguardando revisão: <strong>{saude.links_em_revisao}</strong>
+              </span>
+              <span>
+                Alertas enviados: <strong>{saude.alertas.enviados}</strong>
+                {saude.alertas.falhos > 0 && <span className="muted"> · {saude.alertas.falhos} com falha de envio</span>}
+              </span>
+              {Object.entries(saude.falhas_por_status).map(([status, n]) => (
+                <span key={status} className="muted">
+                  {status.replaceAll("_", " ")}: {n}
+                </span>
+              ))}
+              {saude.produtos_com_falha_na_ultima_coleta.length > 0 && (
+                <span className="muted">
+                  Com falha na última coleta: {saude.produtos_com_falha_na_ultima_coleta.length} produto(s)
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ======= BLOCO AUTOMÁTICO ======= */}
       <div className="card wide">
