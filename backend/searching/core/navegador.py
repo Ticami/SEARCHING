@@ -5,7 +5,10 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 
 class Navegador:
-    """Dono do ChromeDriver; recria a sessão se ela cair no meio da coleta."""
+    """Dono do ChromeDriver; recria a sessão se ela cair no meio da coleta.
+
+    Não esconde que o Chrome é controlado por programa: se a loja bloquear, registramos BLOQUEIO e seguimos.
+    """
 
     def __init__(self, headless: bool = False):
         self.headless = headless
@@ -18,13 +21,9 @@ class Navegador:
             opcoes.add_argument("--window-size=1366,900")
         else:
             opcoes.add_argument("--start-maximized")
-        opcoes.add_argument("--disable-blink-features=AutomationControlled")
-        opcoes.add_argument("--disable-infobars")
         opcoes.add_argument("--disable-extensions")
         opcoes.add_argument("--disable-dev-shm-usage")
         opcoes.page_load_strategy = "eager"
-        opcoes.add_experimental_option("excludeSwitches", ["enable-automation"])
-        opcoes.add_experimental_option("useAutomationExtension", False)
         return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opcoes)
 
     def obter(self):
