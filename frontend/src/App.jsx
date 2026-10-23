@@ -6,6 +6,7 @@ import Links from "./pages/Links";
 import Prints from "./pages/Prints";
 import Curves from "./pages/Curves"; // nova rota
 import Review from "./pages/Review";
+import Alerts from "./pages/Alerts";
 import "./styles/global.css";
 
 export default function App() {
@@ -81,6 +82,13 @@ export default function App() {
             </NavLink>
 
             <NavLink
+              to="/alerts"
+              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+            >
+              Alertas
+            </NavLink>
+
+            <NavLink
               to="/review"
               className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
             >
@@ -99,6 +107,7 @@ export default function App() {
             <Route path="/prints" element={<Prints />} />
             <Route path="/links" element={<Links />} />
             <Route path="/review" element={<Review />} />
+            <Route path="/alerts" element={<Alerts />} />
           </Routes>
         </main>
       </div>

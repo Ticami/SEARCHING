@@ -12,6 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..adapters import adaptador_para
+from ..alerts import servico as alertas
+from ..alerts.servico import Notificador
 from ..db import links as repo_links
 from ..db.models import Coleta, Configuracao, Execucao, Produto, RevisaoLink, TentativaRecuperacao
 from ..db.session import BACKEND_DIR, CONFIG_PADRAO
@@ -112,9 +114,9 @@ def _status_final(s: Session, produto: Produto, resultado: Resultado, cfg: dict)
     return resultado.status, resultado.detalhe
 
 
-def _salvar_coleta(s: Session, exec_id: int, produto: Produto, resultado: Resultado, status: StatusColeta, detalhe: str) -> None:
+def _salvar_coleta(s: Session, exec_id: int, produto: Produto, resultado: Resultado, status: StatusColeta, detalhe: str) -> Coleta:
     leitura = resultado.leitura
-    s.add(
+    coleta = (
         Coleta(
             execucao_id=exec_id,
             produto_id=produto.id,
@@ -133,7 +135,9 @@ def _salvar_coleta(s: Session, exec_id: int, produto: Produto, resultado: Result
             erro_detalhe=detalhe or None,
         )
     )
+    s.add(coleta)
     s.commit()
+    return coleta
 
 
 def _pode_recuperar(s: Session, produto: Produto, cfg: dict) -> bool:
@@ -213,6 +217,7 @@ def executar_coleta(
     dormir=time.sleep,
     prints_dir: Path = PRINTS_DIR,
     trava: TravaColeta | None = None,
+    notificador: Notificador | None = None,
 ) -> dict:
     """Roda uma coleta completa e devolve o resumo. Lança ColetaEmAndamento se já houver outra."""
     with (trava or TravaColeta()):
@@ -226,6 +231,7 @@ def executar_coleta(
             ids = [p.id for p in produtos]
 
         log.info("[exec %s] iniciada (%s): %d produtos", exec_id, origem, len(ids))
+        notificador = notificador or Notificador()
         navegador = navegador_factory(headless=cfg["navegador_headless"] == "1")
         retentativas = int(cfg["retentativas"])
         base_espera = float(cfg["espera_retentativa_s"])
@@ -235,7 +241,7 @@ def executar_coleta(
             limite_bloqueios = int(cfg["bloqueios_para_interromper"])
             bloqueios_seguidos: dict[str, int] = {}
             ja_pediu: list[bool] = []
-            extras = {"corrigidos": 0, "revisao": 0}
+            extras = {"corrigidos": 0, "revisao": 0, "alertas": 0}
 
             def pausar() -> None:
                 dormir(random.uniform(float(cfg["pausa_min_s"]), float(cfg["pausa_max_s"])))
@@ -273,7 +279,7 @@ def executar_coleta(
                             dormir(espera)
 
                     status, detalhe = _status_final(s, produto, resultado, cfg)
-                    _salvar_coleta(s, exec_id, produto, resultado, status, detalhe)
+                    coleta_final = _salvar_coleta(s, exec_id, produto, resultado, status, detalhe)
                     log.info("[exec %s] %s -> %s %s", exec_id, produto.nome_comercial, status.value, detalhe)
 
                     if fez_requisicao and adaptador is not None and resultado.status in STATUS_RECUPERAVEIS and _pode_recuperar(s, produto, cfg):
@@ -283,7 +289,7 @@ def executar_coleta(
                             pausar()
                             resultado = _coletar_uma_vez(navegador, adaptador, produto, cfg, pasta)  # refaz a coleta
                             status, detalhe = _status_final(s, produto, resultado, cfg)
-                            _salvar_coleta(s, exec_id, produto, resultado, status, detalhe)
+                            coleta_final = _salvar_coleta(s, exec_id, produto, resultado, status, detalhe)
                             extras["corrigidos"] += 1
                             log.info("[exec %s] %s (link novo) -> %s %s", exec_id, produto.nome_comercial, status.value, detalhe)
                         elif desfecho == "revisao":
@@ -293,12 +299,19 @@ def executar_coleta(
                             detalhe = "loja bloqueou durante a recuperação do link"
 
                     contagem[status.value] = contagem.get(status.value, 0) + 1
+                    if status == StatusColeta.OK and alertas.processar_coleta(s, produto, coleta_final, cfg, notificador):
+                        extras["alertas"] += 1
                     if fez_requisicao and adaptador is not None:
                         if status == StatusColeta.BLOQUEIO:
                             bloqueios_seguidos[loja] = bloqueios_seguidos.get(loja, 0) + 1
                         else:
                             bloqueios_seguidos[loja] = 0
                 return fez_requisicao
+
+            with fabrica() as s:  # alertas que falharam antes são reenviados primeiro (e não duplicam os novos)
+                reenviados = alertas.reenviar_pendentes(s, notificador)
+                if reenviados:
+                    log.info("[exec %s] %d alerta(s) pendente(s) reenviado(s)", exec_id, reenviados)
 
             for produto_id in ids:
                 try:
@@ -325,8 +338,12 @@ def executar_coleta(
                     "falhas": execucao.falhas,
                     "links_corrigidos": execucao.links_corrigidos,
                     "em_revisao": execucao.em_revisao,
+                    "alertas": extras["alertas"],
                     "por_status": contagem,
                     "pasta": execucao.iniciada_em.strftime("%Y-%m-%d"),
                 }
             log.info("[exec %s] finalizada: %s", exec_id, resumo)
+        if cfg["resumo_diario_email"] == "1" and resumo["total"] > 0:
+            enviado, mensagem = alertas.enviar_resumo(resumo, notificador)
+            log.info("[exec %s] resumo por e-mail: %s", exec_id, mensagem if not enviado else "enviado")
         return resumo

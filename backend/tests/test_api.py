@@ -3,7 +3,7 @@ import sys
 
 import pytest
 
-from searching.db.models import Coleta, RevisaoLink
+from searching.db.models import Alerta, Coleta, RevisaoLink
 from datetime import datetime
 
 
@@ -93,3 +93,61 @@ def test_historico_de_coletas_traz_o_id_do_produto(api):
         s.commit()
     linha = c.get("/api/historico").get_json()[0]
     assert linha["PRODUTO_ID"] == pid and linha["PIX"] == "R$ 3.799,00" and linha["LINK"].endswith("/a/p/1/")
+
+
+# ---------- alertas ----------
+def test_alertas_lista_config_e_status_do_email(api, monkeypatch):
+    c, server = api
+    monkeypatch.setattr(server.alertas_email, "status_config", lambda: {"configurado": False, "motivo": "faltam SMTP_USER", "destinatarios": []})
+    pid = _criar(c)
+    with server.db_fabrica() as s:
+        coleta = Coleta(produto_id=pid, coletado_em=datetime(2026, 10, 23, 12, 0), status="OK", preco_pix_centavos=90000)
+        s.add(coleta)
+        s.flush()
+        s.add(Alerta(produto_id=pid, coleta_id=coleta.id, preco_anterior_centavos=100000, preco_atual_centavos=90000, queda_pct=10.0,
+                     destinatario="eu@x.com", sucesso=False, erro="ConnectionRefusedError: sem rede"))
+        s.commit()
+
+    j = c.get("/api/alertas").get_json()
+    assert j["smtp"]["configurado"] is False and "SMTP_USER" in j["smtp"]["motivo"]
+    assert j["config"]["alerta_pct_queda"] == "5" and j["config"]["alerta_base_preco"] == "pix"
+    a = j["alertas"][0]
+    assert (a["preco_anterior"], a["preco_atual"], a["queda_pct"], a["sucesso"]) == ("R$ 1.000,00", "R$ 900,00", 10.0, False)
+    assert "sem rede" in a["erro"] and a["produto"] == "Samsung Galaxy S25 256GB"
+
+
+def test_alterar_configuracao_global_de_alertas(api):
+    c, _ = api
+    r = c.put("/api/alertas/config", json={"alerta_pct_queda": "7,5", "alerta_base_comparacao": "minimo_n_dias", "resumo_diario_email": "1"})
+    assert r.status_code == 200 and r.get_json()["config"]["alerta_pct_queda"] == "7.5"
+    assert c.get("/api/alertas").get_json()["config"]["resumo_diario_email"] == "1"
+    assert c.put("/api/alertas/config", json={"alerta_pct_queda": "0"}).status_code == 400
+    assert c.put("/api/alertas/config", json={"retentativas": "9"}).status_code == 400
+    assert c.get("/api/alertas").get_json()["config"]["alerta_pct_queda"] == "7.5"  # inválidas não alteraram nada
+
+
+def test_regra_de_alerta_por_produto(api):
+    c, _ = api
+    pid = _criar(c)
+    r = c.put(f"/api/alertas/regras/{pid}", json={"alerta_pct": "3,5", "alerta_base": "media_n_dias", "alerta_preco_alvo": "899,90"})
+    assert r.status_code == 200
+    regra = c.get("/api/alertas/regras").get_json()[0]
+    assert (regra["alerta_pct"], regra["alerta_base"], regra["alerta_preco_alvo"]) == (3.5, "media_n_dias", 899.9)
+
+    c.put(f"/api/alertas/regras/{pid}", json={"alerta_pct": "", "alerta_base": "", "alerta_preco_alvo": ""})  # volta ao padrão global
+    regra = c.get("/api/alertas/regras").get_json()[0]
+    assert (regra["alerta_pct"], regra["alerta_base"], regra["alerta_preco_alvo"]) == (None, None, None)
+
+    for ruim in ({"alerta_pct": "abc"}, {"alerta_pct": "150"}, {"alerta_base": "xyz"}, {"alerta_preco_alvo": "-5"}):
+        assert c.put(f"/api/alertas/regras/{pid}", json=ruim).status_code == 400
+    assert c.put("/api/alertas/regras/999", json={}).status_code == 404
+
+
+def test_email_de_teste_pela_api(api, monkeypatch):
+    c, server = api
+    monkeypatch.setattr(server.alertas_servico, "enviar_teste", lambda: (True, "E-mail de teste enviado para eu@x.com."))
+    r = c.post("/api/alertas/teste")
+    assert r.status_code == 200 and r.get_json()["ok"]
+    monkeypatch.setattr(server.alertas_servico, "enviar_teste", lambda: (False, "ConfigEmailIncompleta: faltam SMTP_USER"))
+    r = c.post("/api/alertas/teste")
+    assert r.status_code == 500 and "SMTP_USER" in r.get_json()["message"]

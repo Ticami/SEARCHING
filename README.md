@@ -2,7 +2,7 @@
 
 Monitor de preços com evidência em print. Abre o link de cada produto em lojas concorrentes, coleta os preços, tira um print da página e guarda o histórico.
 
-> Projeto em evolução (banco SQLite, coleta agendada, recuperação de links e alertas por e-mail estão no roadmap).
+> Projeto em evolução. Já tem banco SQLite, coleta agendada pelo Windows, recuperação automática de links com fila de revisão e alertas de queda por e-mail. Os relatórios ainda estão sendo migrados para o banco.
 
 ## Como surgiu
 
@@ -59,6 +59,15 @@ A coleta diária roda pelo Agendador de Tarefas do Windows e não depende do ser
 - Se o computador estiver desligado ou dormindo no horário, a tarefa roda assim que possível depois.
 - A tarefa roda com o seu usuário, com a sessão aberta (o Chrome abre visível). Os filtros de loja e modelo do modo automático ficam em `backend/config.json`.
 - A tela Home mostra se a tarefa está instalada, a próxima execução e o resultado da última.
+
+## Alertas de preço por e-mail
+
+Quando uma coleta válida mostra queda de preço, o sistema envia um e-mail com produto, loja, preço anterior e atual, percentual, link e **o print anexado**.
+
+1. Copie `.env.example` para `.env` (na raiz; o arquivo nunca vai para o Git) e preencha. No Gmail, ative a verificação em duas etapas e crie uma **senha de app** em https://myaccount.google.com/apppasswords.
+2. Abra a tela **Alertas**, confira a configuração e clique em "Enviar e-mail de teste".
+
+Regras (padrão global, com exceções por produto): queda mínima (5%), comparação com o último preço válido, o menor ou a média dos últimos N dias, preço PIX ou cartão 1x, e preço-alvo opcional. O mesmo preço nunca é avisado duas vezes: um novo aviso exige cair mais um degrau (2%) ou o preço subir e voltar a cair. Coletas suspeitas ou com falha nunca geram alerta. Se o e-mail falhar, o alerta fica registrado e é reenviado na coleta seguinte. Um e-mail de resumo ao fim de cada coleta é opcional.
 
 ## Testes
 

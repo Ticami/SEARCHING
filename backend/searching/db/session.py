@@ -27,6 +27,9 @@ CONFIG_PADRAO = {
     "pausa_max_s": "45",
     "bloqueios_para_interromper": "2",
     "recuperacao_automatica": "1",
+    "alertas_ativos": "1",
+    "alerta_dias_janela": "30",
+    "resumo_diario_email": "0",
     "navegador_headless": "0",
 }
 

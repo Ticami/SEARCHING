@@ -11,9 +11,13 @@ import sys
 from sqlalchemy import select
 
 from searching import agendamento
+from searching.alerts import config as alertas_config
+from searching.alerts import email as alertas_email
+from searching.alerts import regras as alertas_regras
+from searching.alerts import servico as alertas_servico
 from searching.core.precos import formatar_brl
 from searching.db import links as repo_links
-from searching.db.models import Coleta, HistoricoLink, Produto, RevisaoLink
+from searching.db.models import Alerta, Coleta, HistoricoLink, Produto, RevisaoLink
 from searching.db.session import criar_engine, iniciar_banco
 
 # ==============================
@@ -281,6 +285,85 @@ def schedule_set():
     agendamento.salvar_config(cfg)
     ok, mensagem = agendamento.aplicar(cfg)
     return jsonify({"ok": ok, "message": mensagem, **_estado_agendamento()}), (200 if ok else 500)
+
+# ==============================
+# Rotas: ALERTAS DE PREÇO POR E-MAIL
+# ==============================
+def _alerta_json(a, p):
+    return {
+        "id": a.id, "produto_id": p.id, "produto": p.nome_comercial, "loja": p.loja,
+        "preco_anterior": formatar_brl(a.preco_anterior_centavos), "preco_atual": formatar_brl(a.preco_atual_centavos),
+        "queda_pct": a.queda_pct, "base_preco": a.base_preco, "motivos": a.motivos,
+        "enviado_em": a.enviado_em.isoformat(timespec="seconds"), "destinatario": a.destinatario,
+        "sucesso": a.sucesso, "erro": a.erro,
+    }
+
+@app.route("/api/alertas", methods=["GET"])
+def listar_alertas():
+    with db_fabrica() as s:
+        linhas = s.execute(
+            select(Alerta, Produto).join(Produto, Alerta.produto_id == Produto.id).order_by(Alerta.id.desc()).limit(200)
+        ).all()
+        return jsonify({
+            "smtp": alertas_email.status_config(),
+            "config": alertas_config.ler_config(s),
+            "alertas": [_alerta_json(a, p) for a, p in linhas],
+        })
+
+@app.route("/api/alertas/config", methods=["PUT"])
+def salvar_config_alertas():
+    data = request.get_json(force=True, silent=True) or {}
+    with db_fabrica() as s:
+        try:
+            config = alertas_config.salvar_config(s, data)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        s.commit()
+        return jsonify({"message": "Configuração de alertas salva.", "config": config})
+
+def _regra_json(p):
+    return {
+        "produto_id": p.id, "nome": p.nome_comercial, "loja": p.loja,
+        "alerta_pct": p.alerta_pct, "alerta_base": p.alerta_base,
+        "alerta_preco_alvo": p.alerta_preco_alvo_centavos / 100 if p.alerta_preco_alvo_centavos is not None else None,
+    }
+
+@app.route("/api/alertas/regras", methods=["GET"])
+def listar_regras_alerta():
+    with db_fabrica() as s:
+        return jsonify([_regra_json(p) for p in repo_links.listar_ativos(s)])
+
+@app.route("/api/alertas/regras/<int:produto_id>", methods=["PUT"])
+def salvar_regra_alerta(produto_id):
+    """Regra própria do produto; campo vazio/null volta a usar o padrão global."""
+    data = request.get_json(force=True, silent=True) or {}
+    with db_fabrica() as s:
+        p = s.get(Produto, produto_id)
+        if p is None:
+            return jsonify({"error": "Produto não encontrado"}), 404
+        try:
+            pct = data.get("alerta_pct")
+            p.alerta_pct = None if pct in (None, "") else float(str(pct).replace(",", "."))
+            if p.alerta_pct is not None and not 0 < p.alerta_pct <= 100:
+                raise ValueError("A queda mínima deve estar entre 0 e 100")
+            base = data.get("alerta_base") or None
+            if base is not None and base not in alertas_regras.BASES_COMPARACAO:
+                raise ValueError("Base de comparação inválida")
+            p.alerta_base = base
+            alvo = data.get("alerta_preco_alvo")
+            p.alerta_preco_alvo_centavos = None if alvo in (None, "") else round(float(str(alvo).replace(",", ".")) * 100)
+            if p.alerta_preco_alvo_centavos is not None and p.alerta_preco_alvo_centavos <= 0:
+                raise ValueError("O preço-alvo deve ser maior que zero")
+        except ValueError as e:
+            s.rollback()
+            return jsonify({"error": str(e) if str(e) and "could not convert" not in str(e) else "Valor numérico inválido"}), 400
+        s.commit()
+        return jsonify({"message": "Regra salva.", "regra": _regra_json(p)})
+
+@app.route("/api/alertas/teste", methods=["POST"])
+def enviar_email_de_teste():
+    ok, mensagem = alertas_servico.enviar_teste()
+    return jsonify({"ok": ok, "message": mensagem}), (200 if ok else 500)
 
 @app.route("/api/health")
 def api_health():
