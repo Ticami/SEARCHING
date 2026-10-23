@@ -69,40 +69,6 @@ def _domain_label(url: str) -> str:
         return "N/A"
 
 
-# ==============================
-# 🏪 NOVA FUNÇÃO — NOME DO VENDEDOR
-# ==============================
-def _seller_name(driver: webdriver.Chrome, deadline: float) -> str:
-    """
-    Retorna o nome do vendedor (Ex: 'Vendido e entregue por Magazine Luiza')
-    removendo o prefixo e limpando o texto.
-    """
-    entregue_por = "N/A"
-
-    selectors = [
-        (By.CSS_SELECTOR, "[data-testid='seller-info-name']"),
-        (By.CSS_SELECTOR, "[data-testid='seller-name']"),
-        (By.XPATH, "//*[contains(text(),'Vendido') and contains(text(),'por')]"),
-    ]
-
-    for by, sel in selectors:
-        if time.monotonic() >= deadline:
-            break
-        try:
-            el = WebDriverWait(driver, max(2, deadline - time.monotonic()), poll_frequency=0.1).until(
-                EC.presence_of_element_located((by, sel))
-            )
-            txt = el.text
-            for key in ["Vendido e entregue por", "Vendido por", "Loja:", "Entregue por"]:
-                txt = txt.replace(key, "")
-            entregue_por = txt.strip()
-            break
-        except Exception:
-            continue
-
-    return entregue_por
-
-
 def _simple_model(name: str) -> str:
     if not name:
         return name
