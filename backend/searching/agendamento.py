@@ -141,5 +141,7 @@ def ultima_execucao(s: Session) -> dict | None:
         "total": e.total,
         "ok": e.ok,
         "falhas": e.falhas,
+        "links_corrigidos": e.links_corrigidos,
+        "em_revisao": e.em_revisao,
         "em_andamento": e.finalizada_em is None,
     }

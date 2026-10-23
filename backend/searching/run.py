@@ -12,7 +12,7 @@ from logging.handlers import RotatingFileHandler
 from .agendamento import filtros_da_agenda
 from .core.coleta import executar_coleta
 from .core.trava import ColetaEmAndamento
-from .db.migracao_csv import sincronizar_links_csv
+from .db.migracao_csv import importar_se_vazio
 from .db.session import BACKEND_DIR, criar_engine, iniciar_banco
 
 
@@ -38,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
 
     _configurar_log(args.log_nivel)
     fabrica = iniciar_banco(criar_engine())
-    sincronizar_links_csv(fabrica)
+    importar_se_vazio(fabrica)
 
     lojas, incluir, excluir = args.loja, args.incluir, args.excluir
     if args.origem == "agendada" and not (lojas or incluir or excluir):

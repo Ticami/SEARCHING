@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from sqlalchemy import Engine, create_engine, event, select
+from sqlalchemy import Engine, create_engine, event, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from .models import Base, Configuracao
@@ -26,6 +26,7 @@ CONFIG_PADRAO = {
     "pausa_min_s": "20",
     "pausa_max_s": "45",
     "bloqueios_para_interromper": "2",
+    "recuperacao_automatica": "1",
     "navegador_headless": "0",
 }
 
@@ -47,9 +48,24 @@ def criar_engine(caminho: str | Path | None = None) -> Engine:
     return engine
 
 
+def _adicionar_colunas_novas(engine: Engine) -> None:
+    """create_all não altera tabelas existentes: acrescenta colunas que o modelo ganhou depois."""
+    inspetor = inspect(engine)
+    with engine.begin() as conn:
+        for tabela in Base.metadata.sorted_tables:
+            if not inspetor.has_table(tabela.name):
+                continue
+            existentes = {c["name"] for c in inspetor.get_columns(tabela.name)}
+            for coluna in tabela.columns:
+                if coluna.name not in existentes:
+                    tipo = coluna.type.compile(engine.dialect)
+                    conn.execute(text(f'ALTER TABLE "{tabela.name}" ADD COLUMN "{coluna.name}" {tipo}'))
+
+
 def iniciar_banco(engine: Engine) -> sessionmaker[Session]:
     """Cria as tabelas (se faltarem) e semeia as configurações padrão sem sobrescrever as existentes."""
     Base.metadata.create_all(engine)
+    _adicionar_colunas_novas(engine)
     fabrica = sessionmaker(engine, expire_on_commit=False)
     with fabrica() as s:
         existentes = set(s.scalars(select(Configuracao.chave)))

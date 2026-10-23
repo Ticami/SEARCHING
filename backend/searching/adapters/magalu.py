@@ -1,6 +1,6 @@
 import re
 import time
-from urllib.parse import urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 from bs4 import BeautifulSoup
 from selenium.webdriver import ActionChains
@@ -10,7 +10,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from ..core.precos import PRECO_RE
 from ..core.validacao import Leitura
-from .base import LojaAdapter
+from .base import CandidatoBruto, LojaAdapter
 
 # --- Seletores e textos da Magazine Luiza (único lugar a mexer se o layout mudar) ---
 SEL_TITULO = ["h1[data-testid='heading-product-title']", "h1[itemprop='name']", "h1"]
@@ -37,7 +37,12 @@ TEXTOS_BLOQUEIO = (
 TEXTOS_404 = ("página não encontrada", "não encontramos a página", "página não existe", "erro 404")
 TEXTOS_INDISPONIVEL = ("produto indisponível", "indisponível no momento", "avise-me quando", "produto esgotado")
 
+SEL_LINKS_BUSCA = "a[href*='/p/']"
+SEL_TITULO_CARD = "[data-testid='product-title']"
+MAX_RESULTADOS_BUSCA = 20
+
 _PRODUTO_RE = re.compile(r"/p/[^/]+/")
+_CODIGO_RE = re.compile(r"/p/([^/]+)/")
 
 
 def _limpar_vendedor(texto: str) -> str | None:
@@ -57,6 +62,59 @@ class MagaluAdapter(LojaAdapter):
     @staticmethod
     def url_e_produto(url: str) -> bool:
         return bool(_PRODUTO_RE.search(urlparse(url or "").path))
+
+    def codigo_produto(self, url: str) -> str | None:
+        m = _CODIGO_RE.search(urlparse(url or "").path)
+        return m.group(1) if m else None
+
+    def urls_base(self, url: str) -> list[str]:
+        """Sem parâmetros e sem o trecho de vitrine (/te/...), e depois só /p/<código>/."""
+        partes = urlparse(url or "")
+        m = re.match(r"^(.*?/p/[^/]+/)", partes.path)
+        if not m:
+            return []
+        base = f"{partes.scheme}://{partes.netloc}"
+        candidatas = [base + m.group(1), f"{base}/p/{self.codigo_produto(url)}/"]
+        return [u for i, u in enumerate(candidatas) if u != url and u not in candidatas[:i]]
+
+    def url_busca(self, termo: str) -> str | None:
+        termo = re.sub(r"\s+", " ", termo or "").strip()
+        return f"https://www.magazineluiza.com.br/busca/{quote(termo)}/" if termo else None
+
+    @staticmethod
+    def parse_busca(html: str, url_pagina: str) -> list[CandidatoBruto]:
+        """Anúncios (links de produto) da página de resultados. Função pura, testável com HTML salvo."""
+        soup = BeautifulSoup(html or "", "html.parser")
+        vistos: set[str] = set()
+        resultados: list[CandidatoBruto] = []
+        for a in soup.select(SEL_LINKS_BUSCA):
+            href = urljoin(url_pagina, a.get("href", ""))
+            partes = urlparse(href)
+            m = _CODIGO_RE.search(partes.path)
+            if not m or m.group(1) in vistos:
+                continue
+            el = a.select_one(SEL_TITULO_CARD)
+            titulo = (el or a).get_text(" ", strip=True)
+            if not titulo:
+                continue
+            vistos.add(m.group(1))
+            resultados.append(CandidatoBruto(url=f"{partes.scheme}://{partes.netloc}{partes.path}", titulo=titulo))
+            if len(resultados) >= MAX_RESULTADOS_BUSCA:
+                break
+        return resultados
+
+    def buscar(self, driver, termo: str, timeout_s: float) -> list[CandidatoBruto]:
+        url = self.url_busca(termo)
+        if not url:
+            return []
+        driver.get(url)
+        try:
+            WebDriverWait(driver, timeout_s, poll_frequency=0.2).until(
+                lambda d: d.find_elements(By.CSS_SELECTOR, SEL_LINKS_BUSCA)
+            )
+        except Exception:
+            pass
+        return self.parse_busca(driver.page_source, driver.current_url)
 
     @staticmethod
     def parse_pagina(html: str, url_final: str, carregou: bool = True) -> Leitura:

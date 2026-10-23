@@ -172,6 +172,7 @@ export default function Reports() {
     setStatusMsg("");
     try {
       const payload = {
+        id: item.PRODUTO_ID,
         originalNome: item.NOME || item.MODELO,
         originalLink: item.LINK,
         originalLoja: siteFrom(item),

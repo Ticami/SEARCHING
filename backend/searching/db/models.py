@@ -110,7 +110,21 @@ class RevisaoLink(Base):
     motivo: Mapped[str] = mapped_column(String(40))
     candidatos: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [{url, titulo, nota}]
     estado: Mapped[str] = mapped_column(String(20), default="pendente")  # pendente | aprovado | rejeitado
+    criado_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=datetime.now)
     resolvido_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class TentativaRecuperacao(Base):
+    """Uma tentativa de recuperar o link de um produto (limite diário por produto, RF-21)."""
+
+    __tablename__ = "tentativas_recuperacao"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    produto_id: Mapped[int] = mapped_column(ForeignKey("produtos.id"))
+    execucao_id: Mapped[int | None] = mapped_column(ForeignKey("execucoes.id"), nullable=True)
+    em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    estrategia: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    resultado: Mapped[str] = mapped_column(String(30))  # corrigido | revisao | sem_candidato
 
 
 class Alerta(Base):

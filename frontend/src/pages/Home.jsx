@@ -307,6 +307,12 @@ export default function Home() {
                       {agenda.ultima_execucao.ok} de {agenda.ultima_execucao.total} com sucesso ·{" "}
                       {agenda.ultima_execucao.falhas} com falha · origem: {agenda.ultima_execucao.origem}
                     </span>
+                    {(agenda.ultima_execucao.links_corrigidos > 0 || agenda.ultima_execucao.em_revisao > 0) && (
+                      <span className="muted">
+                        {agenda.ultima_execucao.links_corrigidos} link(s) corrigido(s) sozinho(s) ·{" "}
+                        {agenda.ultima_execucao.em_revisao} aguardando revisão
+                      </span>
+                    )}
                   </>
                 ) : (
                   <span className="muted">Nenhuma execução registrada</span>
