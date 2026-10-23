@@ -1,21 +1,21 @@
 {
-  "enabled": false,
+  "enabled": true,
   "times": [
-    "19:05"
+    "12:00"
   ],
   "days": [
     "mon",
     "tue",
     "wed",
     "thu",
-    "fri"
+    "fri",
+    "sat",
+    "sun"
   ],
   "stores": [
     "magalu",
     "magazineluiza"
   ],
-  "include": [
-    "Samsung Galaxy A26"
-  ],
+  "include": [],
   "exclude": []
 }
