@@ -76,6 +76,17 @@ Quando uma coleta válida mostra queda de preço, o sistema envia um e-mail com 
 
 Regras (padrão global, com exceções por produto): queda mínima (5%), comparação com o último preço válido, o menor ou a média dos últimos N dias, preço PIX ou cartão 1x, e preço-alvo opcional. O mesmo preço nunca é avisado duas vezes: um novo aviso exige cair mais um degrau (2%) ou o preço subir e voltar a cair. Coletas suspeitas ou com falha nunca geram alerta. Se o e-mail falhar, o alerta fica registrado e é reenviado na coleta seguinte. Um e-mail de resumo ao fim de cada coleta é opcional.
 
+## Segurança
+
+O SEARCHING é de uso local, e o servidor foi configurado para isso:
+
+- **Só escuta em `127.0.0.1`.** Outros computadores da rede não conseguem acessar. `SEARCHING_HOST` não consegue mudar isso (valores fora do loopback são ignorados com aviso).
+- **Sem modo debug** (o depurador do Flask permite executar código). Para ligá-lo em desenvolvimento: `SEARCHING_DEBUG=1`.
+- **CORS restrito** ao frontend local (`localhost` e `127.0.0.1`, portas 5173 e 5000), sem `*`. Origens locais extras: `SEARCHING_ORIGENS=http://localhost:3000`.
+- **Proteção contra sites maliciosos:** o servidor recusa `Host` que não seja local (DNS rebinding) e escritas (`POST`, `PUT`, `DELETE`) vindas de outro site aberto no seu navegador (CSRF).
+- **Sem senha no código.** As credenciais de e-mail ficam só no `.env`, fora do Git. Não há login: quem usa o seu computador usa o sistema.
+- Os filtros de coleta chegam ao coletor como `--opcao=valor`, sem shell, então um valor nunca vira outra opção ou comando.
+
 ## Testes
 
 ```bash

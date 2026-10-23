@@ -11,7 +11,7 @@ from io import BytesIO
 
 from sqlalchemy import select
 
-from searching import agendamento, relatorios
+from searching import agendamento, relatorios, seguranca
 from searching.alerts import config as alertas_config
 from searching.alerts import email as alertas_email
 from searching.alerts import regras as alertas_regras
@@ -43,7 +43,7 @@ def rodar_coleta_cli(origem, stores=None, include=None, exclude=None):
     cmd = [sys.executable, "-m", "searching.run", "--origem", origem]
     for flag, valores in (("--loja", stores), ("--incluir", include), ("--excluir", exclude)):
         for v in valores or []:
-            cmd += [flag, str(v)]
+            cmd.append(f"{flag}={v}")
     proc = subprocess.run(cmd, cwd=BASE_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace")
     linhas = [l for l in proc.stdout.splitlines() if l.strip()]
     try:
@@ -53,8 +53,24 @@ def rodar_coleta_cli(origem, stores=None, include=None, exclude=None):
     return proc.returncode, resumo
 
 
+# Os prints do servidor têm emoji; com a saída redirecionada (cp1252) isso derrubava o servidor.
+for _fluxo in (sys.stdout, sys.stderr):
+    if hasattr(_fluxo, "reconfigure"):
+        _fluxo.reconfigure(encoding="utf-8", errors="replace")
+
+CONFIG_SERVIDOR = seguranca.configuracao_servidor()
+ORIGENS = seguranca.origens_permitidas(porta=CONFIG_SERVIDOR.porta)
+
 app = Flask(__name__, static_folder="dist", static_url_path="")
-CORS(app)
+CORS(app, origins=sorted(ORIGENS))  # só o frontend local; nada de "*"
+
+
+@app.before_request
+def proteger_servidor_local():
+    """Recusa Host de fora (DNS rebinding) e escritas vindas de sites que não são o nosso frontend (CSRF)."""
+    motivo = seguranca.requisicao_bloqueada(request.method, request.host, request.headers.get("Origin"), ORIGENS)
+    if motivo:
+        return jsonify({"error": motivo}), 403
 
 # ==============================
 # Rotas: LINKS (banco de dados)
@@ -438,4 +454,6 @@ if __name__ == "__main__":
     print("   📂 Lendo histórico: data/historico.csv")
     print("   📄 Links no banco de dados (data/searching.db)")
     print("===========================================")
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    if CONFIG_SERVIDOR.aviso:
+        print(f"   ⚠️  {CONFIG_SERVIDOR.aviso}")
+    app.run(host=CONFIG_SERVIDOR.host, port=CONFIG_SERVIDOR.porta, debug=CONFIG_SERVIDOR.debug)
