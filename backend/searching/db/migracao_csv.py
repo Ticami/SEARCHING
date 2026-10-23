@@ -10,9 +10,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core.atributos import extrair_atributos
+from ..core.lojas import loja_do_link
 from ..core.precos import parse_preco_centavos
 from ..core.status import StatusColeta
-from .models import Coleta, Execucao, Produto
+from .models import Coleta, Execucao, HistoricoLink, Produto
 from .session import BACKEND_DIR, criar_engine, iniciar_banco
 
 # Linhas do histórico com intervalo menor que isso entre si pertencem à mesma execução.
@@ -70,6 +71,49 @@ def migrar_links(s: Session, linhas: list[dict[str, str]]) -> dict[str, int]:
             continue
         _criar_produto(s, nome, loja, url, ativo=True)
         resumo["criados"] += 1
+    return resumo
+
+
+def sincronizar_links(s: Session, linhas: list[dict[str, str]]) -> dict[str, int]:
+    """Faz o links.csv (editado pela tela Links) valer no banco: cria, atualiza URL e ativa/desativa.
+
+    Provisório até o CRUD de links passar a gravar direto no banco (RF-02).
+    """
+    resumo = {"criados": 0, "url_alterada": 0, "desativados": 0}
+    presentes: set[int] = set()
+    for linha in linhas:
+        nome = linha.get("NOME COMERCIAL") or linha.get("NOME", "")
+        url = linha.get("LINK", "")
+        loja = linha.get("LOJA", "") or loja_do_link(url)
+        if not nome or not url:
+            continue
+        produto = s.scalar(select(Produto).where(Produto.nome_comercial == nome, Produto.loja == loja))
+        if produto is None:
+            produto = _criar_produto(s, nome, loja, url, ativo=True)
+            resumo["criados"] += 1
+        else:
+            if produto.url_atual != url:
+                s.add(HistoricoLink(produto_id=produto.id, url_antiga=produto.url_atual, url_nova=url,
+                                    motivo="edição manual (links.csv)", origem="manual"))
+                produto.url_atual = url
+                resumo["url_alterada"] += 1
+            produto.ativo = True
+        presentes.add(produto.id)
+
+    for produto in s.scalars(select(Produto).where(Produto.ativo.is_(True))):
+        if produto.id not in presentes:
+            produto.ativo = False
+            resumo["desativados"] += 1
+    return resumo
+
+
+def sincronizar_links_csv(fabrica, links_csv: Path | None = None) -> dict[str, int]:
+    linhas = _ler_csv(links_csv or BACKEND_DIR / "links.csv")
+    if not linhas:
+        return {"criados": 0, "url_alterada": 0, "desativados": 0}
+    with fabrica() as s:
+        resumo = sincronizar_links(s, linhas)
+        s.commit()
     return resumo
 
 

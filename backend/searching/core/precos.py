@@ -4,6 +4,10 @@ import re
 _PRECO_RE = re.compile(r"(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*|\d+)\s*,\s*(\d{2})(?!\d)")
 
 
+# Preço com a formatação padrão das lojas ("R$ 1.299,00"), para extrair de textos maiores.
+PRECO_RE = re.compile(r"R\$\s?\d{1,3}(?:\.\d{3})*,\d{2}")
+
+
 def parse_preco_centavos(texto) -> int | None:
     """Converte o texto de um preço em centavos inteiros; None se não houver preço."""
     if texto is None:
