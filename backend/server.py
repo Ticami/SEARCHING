@@ -9,8 +9,14 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from tzlocal import get_localzone
 
-# sua coleta original (mantida)
-from main import coletar_precos
+import subprocess
+import sys
+
+from sqlalchemy import select
+
+from searching.core.precos import formatar_brl
+from searching.db.models import Coleta, Produto
+from searching.db.session import criar_engine, iniciar_banco
 
 # ==============================
 # Caminhos / init
@@ -24,6 +30,27 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(PRINTS_DIR, exist_ok=True)
+
+db_fabrica = iniciar_banco(criar_engine())
+
+
+def rodar_coleta_cli(origem, stores=None, include=None, exclude=None):
+    """Executa a coleta pelo mesmo comando usado pelo agendador: python -m searching.run.
+
+    Devolve (codigo_de_saida, resumo_dict). Código 2 = já existe uma coleta em andamento.
+    """
+    cmd = [sys.executable, "-m", "searching.run", "--origem", origem]
+    for flag, valores in (("--loja", stores), ("--incluir", include), ("--excluir", exclude)):
+        for v in valores or []:
+            cmd += [flag, str(v)]
+    proc = subprocess.run(cmd, cwd=BASE_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    linhas = [l for l in proc.stdout.splitlines() if l.strip()]
+    try:
+        resumo = json.loads(linhas[-1]) if linhas else {}
+    except ValueError:
+        resumo = {"erro": (proc.stderr or proc.stdout or "saída inválida do coletor")[-500:]}
+    return proc.returncode, resumo
+
 
 app = Flask(__name__, static_folder="dist", static_url_path="")
 CORS(app)
@@ -144,8 +171,8 @@ def _run_collection_job():
         stores = cfg.get("stores", [])
         include = cfg.get("include", [])
         exclude = cfg.get("exclude", [])
-        df, pasta = coletar_precos(stores=stores, include=include, exclude=exclude)
-        print(f"[AUTO] Coleta OK {datetime.now().isoformat()} - pasta: {pasta} - linhas: {len(df)}")
+        codigo, resumo = rodar_coleta_cli("agendada", stores, include, exclude)
+        print(f"[AUTO] Coleta (saída {codigo}) {datetime.now().isoformat()} - {resumo}")
     except Exception as e:
         print(f"[AUTO] ERRO na coleta automática: {e}")
 
@@ -283,32 +310,28 @@ def listar_historico():
     Retorna o histórico de coletas no formato JSON.
     Garante compatibilidade com as novas colunas 'SITE' e 'ENTREGUE_POR'.
     """
-    if not os.path.exists(HIST_PATH) or os.path.getsize(HIST_PATH) == 0:
-        return jsonify([])
-
     try:
-        # Lê CSV com separador ';' (compatível com o main.py)
-        df = read_csv_safe(HIST_PATH, prefer_semicolon=True).fillna("")
-        df.columns = [c.strip() for c in df.columns]
-
-        # Garante as colunas essenciais
-        expected_cols = [
-            "DATA", "NOME", "MODELO", "SITE", "ENTREGUE_POR",
-            "PIX", "CREDITO", "STATUS", "LINK"
-        ]
-        for col in expected_cols:
-            if col not in df.columns:
-                df[col] = ""
-
-        # Corrige nomes legados (ex: LOJA → SITE)
-        if "LOJA" in df.columns and "SITE" not in df.columns:
-            df["SITE"] = df["LOJA"]
-        # Aproveita coluna antiga PARCELADO caso CREDITO esteja vazio
-        if "PARCELADO" in df.columns and (df["CREDITO"] == "").all():
-            df["CREDITO"] = df["PARCELADO"]
-
-        # Converte para lista de dicionários
-        dados = df.to_dict(orient="records")
+        with db_fabrica() as s:
+            linhas = s.execute(
+                select(Coleta, Produto).join(Produto, Coleta.produto_id == Produto.id).order_by(Coleta.coletado_em)
+            ).all()
+            dados = []
+            for c, p in linhas:
+                dados.append({
+                    "DATA": c.coletado_em.strftime("%Y-%m-%d %H:%M:%S"),
+                    "NOME": p.nome_comercial,
+                    "MODELO": c.titulo_lido or p.nome_comercial,
+                    "SITE": p.loja,
+                    "ENTREGUE_POR": c.vendedor or "",
+                    "PIX": formatar_brl(c.preco_pix_centavos) if c.preco_pix_centavos is not None else "",
+                    "CREDITO": formatar_brl(c.preco_cartao_1x_centavos) if c.preco_cartao_1x_centavos is not None else "",
+                    "STATUS": c.status,
+                    "LINK": p.url_atual,
+                    "PIX_CENTAVOS": c.preco_pix_centavos,
+                    "CREDITO_CENTAVOS": c.preco_cartao_1x_centavos,
+                    "ERRO_DETALHE": c.erro_detalhe or "",
+                    "PRINT": c.caminho_print or "",
+                })
         return jsonify(dados)
 
     except Exception as e:
@@ -395,21 +418,21 @@ def coletar_manual():
         print("🚀 Iniciando coleta manual...")
         print(f"🛒 Filtros -> Stores: {stores}, Include: {include}, Exclude: {exclude}")
 
-        # Usa a função principal do main.py
-        df, pasta = coletar_precos(stores=stores, include=include, exclude=exclude)
+        # Mesmo comando usado pelo agendamento: python -m searching.run
+        codigo, resumo = rodar_coleta_cli("manual", stores, include, exclude)
+        if codigo == 2:
+            return jsonify({"ok": False, "error": "Já existe uma coleta em andamento. Aguarde terminar."}), 409
+        if codigo != 0:
+            return jsonify({"ok": False, "error": resumo.get("erro", "Falha na coleta")}), 500
 
-        # Monta resposta detalhada
-        colunas = list(df.columns) if not df.empty else []
-        linhas = len(df)
-        print(f"✅ Coleta concluída - {linhas} registros - Pasta: {pasta}")
+        print(f"✅ Coleta concluída - {resumo}")
 
         return jsonify({
             "ok": True,
-            "message": "Coleta concluída com sucesso!",
-            "pasta": pasta,
-            "linhas": linhas,
-            "colunas": colunas,
-            "arquivo": os.path.basename(HIST_PATH),
+            "message": f"Coleta concluída: {resumo['ok']} de {resumo['total']} com sucesso, {resumo['falhas']} com falha.",
+            "pasta": resumo["pasta"],
+            "linhas": resumo["total"],
+            "resumo": resumo,
             "detalhes": {
                 "stores": stores,
                 "include": include,

@@ -20,6 +20,13 @@ CONFIG_PADRAO = {
     "variacao_suspeita_pct": "40",
     "retentativas": "2",
     "buscas_por_produto_dia": "1",
+    "timeout_produto_s": "30",
+    "espera_retentativa_s": "15",
+    # Ritmo lento de propósito: as lojas bloqueiam acessos rápidos como se fossem robôs.
+    "pausa_min_s": "20",
+    "pausa_max_s": "45",
+    "bloqueios_para_interromper": "2",
+    "navegador_headless": "0",
 }
 
 

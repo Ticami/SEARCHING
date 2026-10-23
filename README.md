@@ -31,6 +31,28 @@ cd frontend
 npm install
 ```
 
+## Coleta pela linha de comando
+
+A coleta roda como comando independente do servidor web (a partir de `backend/`):
+
+```bash
+python -m searching.run                                    # todos os produtos ativos
+python -m searching.run --origem agendada --loja magalu    # só uma loja
+python -m searching.run --incluir "Samsung Galaxy S25 256GB"
+```
+
+Cada produto recebe um status (`OK`, `LINK_QUEBRADO`, `PRODUTO_DIVERGENTE`, `PRECO_NAO_ENCONTRADO`, `INDISPONIVEL`, `TIMEOUT`, `BLOQUEIO`, `ERRO_INESPERADO` ou `SUSPEITO`). Nunca há `OK` sem preço. O print é o screenshot do próprio navegador, salvo em `backend/prints/AAAA-MM-DD/`. Só uma coleta roda por vez. O log fica em `backend/logs/searching.log`.
+
+Se a loja bloquear o acesso automatizado (por exemplo, "Erro 403"), a coleta registra `BLOQUEIO` e segue em frente, sem tentar contornar.
+
+## Testes
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest
+```
+
 ## Dados locais
 
 `backend/links.csv`, `backend/data/` e `backend/prints/` são gerados/editados localmente e não são versionados.
