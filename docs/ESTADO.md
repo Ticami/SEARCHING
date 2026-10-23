@@ -3,7 +3,7 @@
 Arquivo de continuidade: qualquer sessão nova deve ler isto primeiro e **atualizá-lo ao terminar cada tarefa** (mover o item
 para "Feito" com o hash do commit, ajustar "Em andamento" e "Próximos passos" e incluir o arquivo no mesmo commit da tarefa).
 
-Última atualização: tarefa do Windows removida (testes: 223 passando; GitHub em `135000c`, local 4 commits à frente).
+Última atualização: push feito a pedido do usuário; GitHub e master local iguais (testes: 223 passando).
 
 ## Resumo do projeto
 
@@ -39,7 +39,8 @@ relatórios. Dados 100% locais.
 | Aviso amarelo fixo com os erros e Refazer por produto | `78b0ee3` |
 | Limpeza (modo automático, agendamento, componentes e CSS mortos, rotas antigas) e nova tela Início explicativa | `a400004` |
 | `docs/ESTADO.md` criado | `a555ba0` |
-| Tarefa do Windows "SEARCHING - Coleta" removida a pedido do usuário (ação fora do repositório, conferida: não existe mais) | este commit |
+| Tarefa do Windows "SEARCHING - Coleta" removida a pedido do usuário (ação fora do repositório, conferida: não existe mais) | `cfe4efc` |
+| **Push** de tudo para o GitHub (branch de segurança `backup/antes-das-etapas` mantida) | este commit é o topo da master |
 
 ## Em andamento
 
@@ -69,6 +70,5 @@ Nada. A limpeza e a nova tela inicial terminaram e estão em `a400004` (conferid
 
 ## Pendências do usuário
 
-- Carregar a extensão no Chrome: `chrome://extensions`, Modo do desenvolvedor, **Carregar sem compactação**, pasta `extensao`.
+- Extensão do Chrome: **já carregada pelo usuário** (pasta `extensao`). Falta testar a coleta assistida na Magalu real e relatar o que aparecer (cartão 1x vazio, preço não encontrado etc.).
 - Reiniciar o programa (`iniciar_searching.bat`) para usar a versão nova (a tela e o servidor antigos não têm a coleta assistida).
-- Decidir se quer fazer o push dos 4 commits locais (`b8e8ddd`, `78b0ee3`, `a400004`, `a555ba0`) para o GitHub.
