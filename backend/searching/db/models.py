@@ -138,6 +138,8 @@ class Alerta(Base):
     queda_pct: Mapped[float] = mapped_column(Float)
     enviado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     destinatario: Mapped[str] = mapped_column(String(200), default="")
+    base_preco: Mapped[str] = mapped_column(String(20), default="pix")  # pix | cartao_1x
+    motivos: Mapped[str] = mapped_column(String(60), default="queda")  # "queda", "preco_alvo" ou os dois, separados por vírgula
     sucesso: Mapped[bool] = mapped_column(Boolean, default=False)
     erro: Mapped[str | None] = mapped_column(Text, nullable=True)
 

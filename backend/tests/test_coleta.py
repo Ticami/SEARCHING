@@ -3,10 +3,12 @@ from datetime import datetime
 from sqlalchemy import select
 
 from searching.adapters.base import CandidatoBruto, LojaAdapter
+from searching.alerts.email import ConfigSMTP
+from searching.alerts.servico import Notificador
 from searching.core.coleta import executar_coleta
 from searching.core.trava import TravaColeta
 from searching.core.validacao import Leitura
-from searching.db.models import Coleta, Configuracao, Execucao, HistoricoLink, Produto, RevisaoLink, TentativaRecuperacao
+from searching.db.models import Alerta, Coleta, Configuracao, Execucao, HistoricoLink, Produto, RevisaoLink, TentativaRecuperacao
 from searching.db.session import criar_engine, iniciar_banco
 
 
@@ -60,7 +62,7 @@ class AdaptadorFalso(LojaAdapter):
         titulo = "Celular Samsung Galaxy S25 5G, 256GB"
         if url.endswith("lento-depois-ok") and self.chamadas[url] == 1:
             return Leitura(url_final=url, titulo=titulo, pix_texto=None)  # 1ª leitura sem preço
-        preco = "R$ 100,00" if url.endswith("salto") else "R$ 3.799,00"
+        preco = "R$ 100,00" if url.endswith("salto") else "R$ 3.500,00" if url.endswith("queda") else "R$ 3.799,00"
         return Leitura(url_final=url, titulo=titulo, vendedor="Samsung", pix_texto=preco)
 
     def ler_cartao_1x(self, driver, timeout_s):
@@ -77,8 +79,12 @@ def _montar(tmp_path, urls, nomes=None):
     return fabrica
 
 
+CONFIG_SMTP_FALSA = ConfigSMTP("smtp.teste", 587, "u", "s", "remetente@teste", ("dest@teste",))
+
+
 def _rodar(fabrica, tmp_path, adaptador, dormir=lambda s: None, **kw):
     navegadores = []
+    kw.setdefault("notificador", Notificador(carregar_config=lambda: CONFIG_SMTP_FALSA, enviar=lambda msg, cfg: None))
 
     def fabrica_navegador(headless=False):
         navegadores.append(NavegadorFalso(headless))
@@ -259,3 +265,83 @@ def test_recuperacao_pode_ser_desligada_na_configuracao(tmp_path):
     adaptador = AdaptadorFalso([CandidatoBruto(NOVO, "Samsung Galaxy S25 5G, 256GB")])
     _rodar(fabrica, tmp_path, adaptador)
     assert adaptador.buscas == 0
+
+
+# ---------- alertas de preço integrados à coleta ----------
+def _notificador_com_caixa():
+    enviadas = []
+    return enviadas, Notificador(carregar_config=lambda: CONFIG_SMTP_FALSA, enviar=lambda msg, cfg: enviadas.append(msg))
+
+
+def test_queda_dispara_email_com_print_e_segunda_execucao_nao_duplica(tmp_path):
+    fabrica = _montar(tmp_path, ["https://l/ok"], S25_NOME)
+    enviadas, notificador = _notificador_com_caixa()
+    adaptador = AdaptadorFalso()
+
+    resumo, _ = _rodar(fabrica, tmp_path, adaptador, notificador=notificador)  # 1ª coleta: R$ 3.799,00, sem histórico
+    assert resumo["alertas"] == 0 and enviadas == []
+
+    with fabrica() as s:
+        s.get(Produto, 1).url_atual = "https://l/queda"  # o anúncio passa a custar R$ 3.500,00 (-7,9%)
+        s.commit()
+    resumo, _ = _rodar(fabrica, tmp_path, adaptador, notificador=notificador)
+    assert resumo["alertas"] == 1 and len(enviadas) == 1
+    msg = enviadas[0]
+    assert "R$ 3.500,00" in msg["Subject"] and "-7,9%" in msg["Subject"]
+    corpo = msg.get_body(("html",)).get_content()
+    assert "R$ 3.799,00" in corpo and "https://l/queda" in corpo
+    assert [a.get_content_type() for a in msg.iter_attachments()] == ["image/png"]  # o print da coleta
+    with fabrica() as s:
+        alerta = s.scalars(select(Alerta)).one()
+        assert alerta.sucesso and alerta.preco_anterior_centavos == 379900 and alerta.preco_atual_centavos == 350000
+
+    resumo, _ = _rodar(fabrica, tmp_path, adaptador, notificador=notificador)  # mesmo preço de novo
+    assert resumo["alertas"] == 0 and len(enviadas) == 1
+
+
+def test_coleta_suspeita_nao_gera_alerta(tmp_path):
+    fabrica = _montar(tmp_path, ["https://l/ok"], S25_NOME)
+    enviadas, notificador = _notificador_com_caixa()
+    adaptador = AdaptadorFalso()
+    _rodar(fabrica, tmp_path, adaptador, notificador=notificador)
+    with fabrica() as s:
+        s.get(Produto, 1).url_atual = "https://l/salto"  # R$ 100,00: -97%, leitura quase certamente errada
+        s.commit()
+    resumo, _ = _rodar(fabrica, tmp_path, adaptador, notificador=notificador)
+    assert resumo["por_status"] == {"SUSPEITO": 1} and resumo["alertas"] == 0 and enviadas == []
+
+
+def test_falha_de_smtp_nao_derruba_a_coleta_e_e_reenviada_na_proxima(tmp_path):
+    fabrica = _montar(tmp_path, ["https://l/ok"], S25_NOME)
+    adaptador = AdaptadorFalso()
+    _rodar(fabrica, tmp_path, adaptador)
+    with fabrica() as s:
+        s.get(Produto, 1).url_atual = "https://l/queda"
+        s.commit()
+
+    def smtp_fora(msg, cfg):
+        raise ConnectionRefusedError("sem rede")
+
+    resumo, _ = _rodar(fabrica, tmp_path, adaptador, notificador=Notificador(carregar_config=lambda: CONFIG_SMTP_FALSA, enviar=smtp_fora))
+    assert resumo["ok"] == 1  # a coleta terminou normalmente
+    with fabrica() as s:
+        assert s.scalars(select(Alerta)).one().sucesso is False
+
+    enviadas, notificador = _notificador_com_caixa()
+    _rodar(fabrica, tmp_path, adaptador, notificador=notificador)  # SMTP voltou: o alerta pendente sai
+    assert len(enviadas) == 1
+    with fabrica() as s:
+        assert [a.sucesso for a in s.scalars(select(Alerta))] == [True]  # nenhum duplicado
+
+
+def test_resumo_diario_so_quando_ligado(tmp_path):
+    fabrica = _montar(tmp_path, ["https://l/ok"], S25_NOME)
+    enviadas, notificador = _notificador_com_caixa()
+    _rodar(fabrica, tmp_path, AdaptadorFalso(), notificador=notificador)
+    assert enviadas == []  # desligado por padrão
+
+    with fabrica() as s:
+        s.merge(Configuracao(chave="resumo_diario_email", valor="1"))
+        s.commit()
+    _rodar(fabrica, tmp_path, AdaptadorFalso(), notificador=notificador)
+    assert len(enviadas) == 1 and enviadas[0]["Subject"].startswith("[SEARCHING] Resumo: 1/1")
