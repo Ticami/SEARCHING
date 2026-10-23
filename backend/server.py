@@ -5,15 +5,13 @@ import os
 import re
 import json
 from datetime import datetime
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
-from tzlocal import get_localzone
 
 import subprocess
 import sys
 
 from sqlalchemy import select
 
+from searching import agendamento
 from searching.core.precos import formatar_brl
 from searching.db.models import Coleta, Produto
 from searching.db.session import criar_engine, iniciar_banco
@@ -116,81 +114,6 @@ def _normalize_links_df(df: pd.DataFrame) -> pd.DataFrame:
 
 def _persist_links_df(df: pd.DataFrame):
     df.to_csv(LINKS_PATH, sep=";", index=False, encoding="utf-8-sig")
-
-def _load_config():
-    default = {
-        "enabled": False,
-        "times": [],
-        "days": ["mon","tue","wed","thu","fri"],
-        "stores": [],
-        "include": [],
-        "exclude": []
-    }
-    if not os.path.exists(CONFIG_PATH):
-        return default
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-        cfg.setdefault("enabled", False)
-        cfg.setdefault("times", [])
-        cfg.setdefault("days", ["mon","tue","wed","thu","fri"])
-        cfg.setdefault("stores", [])
-        cfg.setdefault("include", [])
-        cfg.setdefault("exclude", [])
-        return cfg
-    except Exception:
-        return default
-
-def _save_config(cfg):
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
-
-def _validate_time_str(t):
-    return bool(re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(t).strip()))
-
-def _days_to_cron(days):
-    pt = {"seg":"mon","ter":"tue","qua":"wed","qui":"thu","sex":"fri","sab":"sat","dom":"sun"}
-    norm = [(pt.get(str(d).lower().strip(), str(d).lower().strip())) for d in days]
-    valid = [d for d in norm if d in ["mon","tue","wed","thu","fri","sat","sun"]]
-    return ",".join(valid) if valid else "mon,tue,wed,thu,fri"
-
-# ==============================
-# Scheduler (mantido)
-# ==============================
-local_tz = str(get_localzone())
-scheduler = BackgroundScheduler(timezone=local_tz)
-
-def _unschedule_all():
-    for job in list(scheduler.get_jobs()):
-        if job.id.startswith("searching-"):
-            scheduler.remove_job(job.id)
-
-def _run_collection_job():
-    try:
-        cfg = _load_config()
-        stores = cfg.get("stores", [])
-        include = cfg.get("include", [])
-        exclude = cfg.get("exclude", [])
-        codigo, resumo = rodar_coleta_cli("agendada", stores, include, exclude)
-        print(f"[AUTO] Coleta (saída {codigo}) {datetime.now().isoformat()} - {resumo}")
-    except Exception as e:
-        print(f"[AUTO] ERRO na coleta automática: {e}")
-
-def _schedule_from_config(cfg):
-    _unschedule_all()
-    if not cfg.get("enabled"):
-        return
-    cron_days = _days_to_cron(cfg.get("days", []))
-    for i, t in enumerate(cfg.get("times", [])):
-        if not _validate_time_str(t):
-            continue
-        hh, mm = t.split(":")
-        trig = CronTrigger(day_of_week=cron_days, hour=int(hh), minute=int(mm), timezone=local_tz)
-        scheduler.add_job(_run_collection_job, trig, id=f"searching-job-{i}", replace_existing=True)
-
-cfg0 = _load_config()
-_schedule_from_config(cfg0)
-scheduler.start()
 
 # ==============================
 # Rotas: LINKS
@@ -342,48 +265,35 @@ def listar_historico():
 # ==============================
 # Rotas: Scheduler (mantidas)
 # ==============================
+def _estado_agendamento():
+    with db_fabrica() as s:
+        ultima = agendamento.ultima_execucao(s)
+    cfg = agendamento.carregar_config()
+    return {
+        "config": cfg,
+        "tarefa": agendamento.consultar_tarefa(),
+        "ultima_execucao": ultima,
+        "comando": agendamento.comando_instalacao(cfg["times"] or ["12:00"], agendamento.normalizar_dias(cfg["days"])),
+    }
+
 @app.route("/api/schedule", methods=["GET"])
 def schedule_get():
-    cfg = _load_config()
-    jobs = []
-    for job in scheduler.get_jobs():
-        if job.id.startswith("searching-"):
-            jobs.append({
-                "id": job.id,
-                "next_run": job.next_run_time.isoformat() if job.next_run_time else None
-            })
-    return jsonify({"config": cfg, "jobs": jobs, "timezone": local_tz})
+    return jsonify(_estado_agendamento())
 
 @app.route("/api/schedule", methods=["POST"])
 def schedule_set():
     data = request.get_json(force=True, silent=True) or {}
-    enabled = bool(data.get("enabled", False))
-    times = data.get("times", [])
-    days = data.get("days", [])
-    stores = data.get("stores", [])
-    include = data.get("include", [])
-    exclude = data.get("exclude", [])
-
-    good_times = [t for t in times if _validate_time_str(t)]
     cfg = {
-        "enabled": enabled,
-        "times": sorted(set(good_times)),
-        "days": days,
-        "stores": stores if isinstance(stores, list) else [],
-        "include": include if isinstance(include, list) else [],
-        "exclude": exclude if isinstance(exclude, list) else [],
+        "enabled": bool(data.get("enabled", False)),
+        "times": sorted({t for t in data.get("times", []) if agendamento.horario_valido(t)}),
+        "days": agendamento.normalizar_dias(data.get("days", [])),
+        "stores": data.get("stores") if isinstance(data.get("stores"), list) else [],
+        "include": data.get("include") if isinstance(data.get("include"), list) else [],
+        "exclude": data.get("exclude") if isinstance(data.get("exclude"), list) else [],
     }
-    _save_config(cfg)
-    _schedule_from_config(cfg)
-
-    jobs = []
-    for job in scheduler.get_jobs():
-        if job.id.startswith("searching-"):
-            jobs.append({
-                "id": job.id,
-                "next_run": job.next_run_time.isoformat() if job.next_run_time else None
-            })
-    return jsonify({"message": "Agendamento atualizado", "config": cfg, "jobs": jobs})
+    agendamento.salvar_config(cfg)
+    ok, mensagem = agendamento.aplicar(cfg)
+    return jsonify({"ok": ok, "message": mensagem, **_estado_agendamento()}), (200 if ok else 500)
 
 @app.route("/api/health")
 def api_health():
@@ -448,7 +358,6 @@ def coletar_manual():
 if __name__ == "__main__":
     print("===========================================")
     print("   🚀 Servidor Flask iniciado com sucesso! ")
-    print(f"   🕒 Timezone: {local_tz}")
     print("   📂 Lendo histórico: data/historico.csv")
     print("   📄 Lendo links: links.csv")
     print("===========================================")
