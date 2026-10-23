@@ -25,6 +25,7 @@ O SEARCHING resolve a coleta e, principalmente, a **confiabilidade**:
 | **Status** | `OK`, `LINK_QUEBRADO`, `PRODUTO_DIVERGENTE`, `PRECO_NAO_ENCONTRADO`, `INDISPONIVEL`, `TIMEOUT`, `BLOQUEIO`, `ERRO_INESPERADO` e `SUSPEITO`. |
 | **Recuperação de links** | Redirecionamento, caminho base do produto e busca da loja, com **nota de confiança** e regras duras para nunca trocar de variante. O que não passa vai para a fila de **Revisão**. |
 | **Agendamento** | Tarefa do Windows diária (12:00 por padrão), que roda assim que possível se o PC estava desligado. |
+| **Coleta assistida** | Para lojas que bloqueiam robôs: uma extensão do Chrome lê a página que **você** abre (um clique por produto) e envia preço PIX, cartão 1x e print ao sistema. |
 | **Alertas** | E-mail com preço anterior e atual, percentual, link e o **print anexado**. Sem repetir o mesmo preço. |
 | **Relatórios** | Histórico filtrável, curvas de preço, galeria de prints com o preço ao lado, exportação para Excel e painel de saúde. |
 
@@ -37,6 +38,10 @@ O SEARCHING resolve a coleta e, principalmente, a **confiabilidade**:
 **Revisão de links** (links que não puderam ser corrigidos com segurança, com o print da falha e candidatos):
 
 ![Revisão de links](docs/revisao.png)
+
+**Coleta assistida** (o resultado preenche sozinho enquanto você aperta Próximo; a imagem vem do teste ponta a ponta, com uma loja simulada):
+
+![Coleta assistida](docs/assistida.png)
 
 ## Como funciona
 
@@ -77,7 +82,8 @@ backend/searching/
 backend/server.py   API Flask (só lê/grava o banco e dispara o CLI)
 backend/tests/      mais de 200 testes (pytest), com páginas HTML salvas como fixtures
 frontend/           React + Vite
-scripts/            agendamento do Windows, demonstração e geração das imagens deste README
+extensao/           extensão do Chrome da coleta assistida (Manifest V3)
+scripts/            agendamento do Windows, demonstração, teste ponta a ponta e geração das imagens deste README
 ```
 
 ## Instalação e uso (Windows)
@@ -113,6 +119,16 @@ Pela tela **Início** ou pelo script:
 ```
 
 A tarefa roda com o seu usuário e com a sessão aberta (o Chrome abre visível). Se o computador estava desligado ou dormindo no horário, ela roda assim que possível. Os filtros de loja e modelo do modo automático ficam em `backend/config.json`.
+
+### Coleta assistida (para lojas que bloqueiam robôs)
+
+Algumas lojas, como a Magazine Luiza, recusam navegador controlado por programa. Para elas há a **coleta assistida**: você abre cada produto no seu Chrome de sempre, com um clique por produto, e uma extensão envia preço, cartão 1x e print ao sistema.
+
+1. Instale a extensão uma vez (`chrome://extensions`, Modo do desenvolvedor, **Carregar sem compactação**, pasta `extensao`). Veja [extensao/README.md](extensao/README.md).
+2. Abra a tela **Coleta assistida**, clique em **Começar** e arraste a janela da loja para o outro monitor.
+3. A cada **Próximo** (ou espaço, ou →) o produto abre e o resultado aparece preenchido. Há também Refazer, Pular e Link quebrado.
+
+Tudo o que vem depois é igual à coleta automática: validação de título, status, preço suspeito, alertas por e-mail com o print e relatórios. Intervalo mínimo de 3 segundos entre páginas, uma página por clique.
 
 ### Alertas por e-mail
 
@@ -169,7 +185,8 @@ Os testes cobrem o parser de preços, a classificação de status, as regras de 
 
 ## Limitações conhecidas
 
-- **Anti-bot.** A Magazine Luiza bloqueia acessos automatizados (o servidor responde "Erro 403" mesmo para um navegador controlado por Selenium). O sistema registra o `BLOQUEIO` com o print da página de erro e segue, **sem tentar contornar**. Para uso contínuo em produção o caminho correto é um canal oficial (API de marketplace ou de afiliados, ou um acordo de dados). Por isso o repositório traz a demonstração com dados fictícios.
+- **Anti-bot.** A Magazine Luiza bloqueia acessos automatizados (o servidor responde "Erro 403" mesmo para um navegador controlado por Selenium, no mesmo computador onde a página abre normalmente à mão). A coleta automática registra o `BLOQUEIO` com o print da página de erro e segue, **sem tentar contornar**. Para a Magalu existe a **coleta assistida** (um clique humano por produto), que não escala para centenas de produtos. Para volume e uso contínuo o caminho correto é um canal oficial (API de marketplace ou de afiliados, ou um acordo de dados). Por isso o repositório traz também a demonstração com dados fictícios.
+- **Coleta assistida testada com loja simulada.** O fluxo completo (extensão, tela, servidor, print, cartão 1x) é testado ponta a ponta com Chrome real contra uma loja simulada. Os seletores da Magalu real, em especial o menu de pagamento, ainda precisam ser confirmados em uso.
 - **Só a Magazine Luiza tem adaptador.** Amazon e Casas Bahia são reconhecidas pelo domínio, mas não coletadas.
 - **Seletores da busca não validados ao vivo.** A leitura de preços e a busca da Magalu foram escritas a partir do código original e testadas com HTML salvo; como a loja estava bloqueando, não foram conferidas contra a página real nesta versão.
 - **Windows.** O agendamento usa o Agendador de Tarefas e o Chrome visível; a tarefa só roda com a sessão aberta.

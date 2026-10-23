@@ -42,6 +42,7 @@ SEL_TITULO_CARD = "[data-testid='product-title']"
 MAX_RESULTADOS_BUSCA = 20
 
 _PRODUTO_RE = re.compile(r"/p/[^/]+/")
+_UMA_PARCELA_RE = re.compile(r"(?<!\d)1x")  # "1x", mas não "11x" nem "12x"
 _CODIGO_RE = re.compile(r"/p/([^/]+)/")
 
 
@@ -155,6 +156,22 @@ class MagaluAdapter(LojaAdapter):
             indisponivel=pix_texto is None and any(t in texto for t in TEXTOS_INDISPONIVEL),
         )
 
+    @staticmethod
+    def parse_cartao_1x(html: str) -> str | None:
+        """Preço à vista no cartão de crédito, lido do menu "opções de pagamento" já aberto na página."""
+        soup = BeautifulSoup(html or "", "html.parser")
+        for linha in soup.select(SEL_LINHAS_CREDITO):
+            texto = re.sub(r"\s+", " ", linha.get_text(" ", strip=True))
+            if _UMA_PARCELA_RE.search(texto):
+                m = PRECO_RE.search(texto)
+                return m.group(0) if m else None
+        return None
+
+    def ler_html(self, html: str, url_final: str, html_modal: str | None = None) -> Leitura:
+        leitura = self.parse_pagina(html, url_final)
+        leitura.cartao_texto = self.parse_cartao_1x(html_modal or html)
+        return leitura
+
     def carregar(self, driver, url: str, timeout_s: float) -> Leitura:
         driver.get(url)
         if "//m.magazineluiza.com.br" in driver.current_url:
@@ -206,8 +223,9 @@ class MagaluAdapter(LojaAdapter):
                 EC.presence_of_element_located((By.CSS_SELECTOR, SEL_LINHAS_CREDITO))
             )
             for linha in driver.find_elements(By.CSS_SELECTOR, SEL_LINHAS_CREDITO):
-                if "1x" in linha.text:
-                    m = PRECO_RE.search(re.sub(r"\s+", " ", linha.text))
+                texto = re.sub(r"\s+", " ", linha.text)
+                if _UMA_PARCELA_RE.search(texto):
+                    m = PRECO_RE.search(texto)
                     return m.group(0) if m else None
         except Exception:
             return None

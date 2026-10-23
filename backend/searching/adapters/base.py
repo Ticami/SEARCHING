@@ -29,6 +29,10 @@ class LojaAdapter(ABC):
     def ler_cartao_1x(self, driver, timeout_s: float) -> str | None:
         """Lê o preço à vista no cartão de crédito (1x). Pode interagir com a página."""
 
+    def ler_html(self, html: str, url_final: str, html_modal: str | None = None) -> Leitura:
+        """Lê uma página já aberta por outra via (coleta assistida): HTML da página e, se houver, do menu de pagamento."""
+        raise NotImplementedError(f"{self.nome} não suporta a coleta assistida")
+
     # --- recuperação de links (opcional: lojas sem suporte devolvem vazio) ---
 
     def codigo_produto(self, url: str) -> str | None:

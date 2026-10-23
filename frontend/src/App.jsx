@@ -7,6 +7,7 @@ import Prints from "./pages/Prints";
 import Curves from "./pages/Curves"; // nova rota
 import Review from "./pages/Review";
 import Alerts from "./pages/Alerts";
+import Assisted from "./pages/Assisted";
 import "./styles/global.css";
 
 export default function App() {
@@ -82,6 +83,13 @@ export default function App() {
             </NavLink>
 
             <NavLink
+              to="/assisted"
+              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+            >
+              Coleta assistida
+            </NavLink>
+
+            <NavLink
               to="/alerts"
               className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
             >
@@ -108,6 +116,7 @@ export default function App() {
             <Route path="/links" element={<Links />} />
             <Route path="/review" element={<Review />} />
             <Route path="/alerts" element={<Alerts />} />
+            <Route path="/assisted" element={<Assisted />} />
           </Routes>
         </main>
       </div>
