@@ -3,7 +3,7 @@
 Arquivo de continuidade: qualquer sessão nova deve ler isto primeiro e **atualizá-lo ao terminar cada tarefa** (mover o item
 para "Feito" com o hash do commit, ajustar "Em andamento" e "Próximos passos" e incluir o arquivo no mesmo commit da tarefa).
 
-Última atualização: depois do commit `a400004` (testes: 223 passando; GitHub em `135000c`, local 3 commits à frente).
+Última atualização: tarefa do Windows removida (testes: 223 passando; GitHub em `135000c`, local 4 commits à frente).
 
 ## Resumo do projeto
 
@@ -38,6 +38,8 @@ relatórios. Dados 100% locais.
 | Coleta assistida: extensão do Chrome, fila na tela, captura no servidor, teste ponta a ponta | `b8e8ddd` |
 | Aviso amarelo fixo com os erros e Refazer por produto | `78b0ee3` |
 | Limpeza (modo automático, agendamento, componentes e CSS mortos, rotas antigas) e nova tela Início explicativa | `a400004` |
+| `docs/ESTADO.md` criado | `a555ba0` |
+| Tarefa do Windows "SEARCHING - Coleta" removida a pedido do usuário (ação fora do repositório, conferida: não existe mais) | este commit |
 
 ## Em andamento
 
@@ -67,8 +69,6 @@ Nada. A limpeza e a nova tela inicial terminaram e estão em `a400004` (conferid
 
 ## Pendências do usuário
 
-- A tarefa do Windows **"SEARCHING - Coleta"** continua instalada (próxima execução 24/10 às 12:00) e já não tem tela para
-  geri-la. Remover quando quiser: `Unregister-ScheduledTask -TaskName "SEARCHING - Coleta" -Confirm:$false` (a sessão perguntou e aguarda a resposta).
 - Carregar a extensão no Chrome: `chrome://extensions`, Modo do desenvolvedor, **Carregar sem compactação**, pasta `extensao`.
 - Reiniciar o programa (`iniciar_searching.bat`) para usar a versão nova (a tela e o servidor antigos não têm a coleta assistida).
-- Decidir se quer fazer o push dos 3 commits locais (`b8e8ddd`, `78b0ee3`, `a400004`) para o GitHub.
+- Decidir se quer fazer o push dos 4 commits locais (`b8e8ddd`, `78b0ee3`, `a400004`, `a555ba0`) para o GitHub.
