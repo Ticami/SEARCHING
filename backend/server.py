@@ -2,6 +2,7 @@ from flask import Flask, g, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 import os
 import json
+import logging
 from datetime import datetime
 
 import subprocess
@@ -10,7 +11,7 @@ from io import BytesIO
 
 from sqlalchemy import select
 
-from searching import assistida, modo, relatorios, seguranca
+from searching import assistida, logs, modo, relatorios, seguranca
 from searching import web_conta
 from searching.auth import guarda
 from searching.alerts import config as alertas_config
@@ -76,13 +77,19 @@ if HOSPEDADO and os.environ.get("SEARCHING_PROXIES"):  # atrás de um proxy reve
     n = int(os.environ["SEARCHING_PROXIES"])
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=n, x_proto=n, x_host=n)
 
-# Rotas de TODA a API passam pela guarda de autorização (deny by default). Registrada ANTES do filtro de Host/Origin,
-# mas a ordem de execução abaixo é: Host/Origin -> política.
+if HOSPEDADO or os.environ.get("SEARCHING_LOG_FORMATO"):  # logs estruturados (uma linha JSON por requisição)
+    logs.configurar()
+    logs.instalar(app)
+
+
+# Ordem de execução de cada requisição: filtro de Host/Origin (abaixo) -> política de acesso (guarda.instalar).
 @app.before_request
 def proteger_servidor_local():
     """Recusa Host de fora (DNS rebinding) e escritas vindas de sites que não são o nosso frontend (CSRF)."""
     # A extensão envia as capturas com Origin "chrome-extension://..." e prova quem é pelo token (por usuário no
     # modo hospedado, arquivo local no modo local). Token no cabeçalho não é credencial "ambiente": outro site não o envia.
+    if request.path == "/api/health":  # verificação de saúde do orquestrador (Host interno); não expõe dado nenhum
+        return None
     if HOSPEDADO:
         da_extensao = bool(guarda.token_da_requisicao())
     else:
@@ -96,6 +103,15 @@ def proteger_servidor_local():
 
 guarda.instalar(app)
 app.register_blueprint(web_conta.bp)
+
+if HOSPEDADO:
+    from searching.db.models import Usuario
+
+    with db_fabrica() as _s:
+        if not _s.scalar(select(Usuario.id).limit(1)):
+            logging.getLogger("searching").warning(
+                "Nenhum usuário cadastrado: crie o primeiro administrador com  python -m searching.usuarios criar-admin --email voce@exemplo.com"
+            )
 
 
 def _uid():
@@ -518,6 +534,8 @@ def coletar_manual():
 
 
 if __name__ == "__main__":
+    if HOSPEDADO:
+        sys.exit("O modo hospedado não usa o servidor de desenvolvimento do Flask. Use: gunicorn -b 0.0.0.0:8000 server:app (veja docs/IMPLANTACAO.md).")
     print("===========================================")
     print("   🚀 Servidor Flask iniciado com sucesso! ")
     print("   📄 Dados no banco local (backend/data/searching.db)")

@@ -1,0 +1,49 @@
+# Implantação do modo hospedado: app + PostgreSQL + Caddy (HTTPS automático). Guia: docs/IMPLANTACAO.md
+# Uso:  cp deploy/hospedado.env.example deploy/hospedado.env   (preencha)   e   docker compose --env-file deploy/hospedado.env up -d --build
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      SEARCHING_MODO: hospedado
+      SEARCHING_URL_PUBLICA: https://${SEARCHING_DOMINIO}
+      SEARCHING_PROXIES: "1"
+      SEARCHING_DATABASE_URL: postgresql://searching:${POSTGRES_SENHA}@db:5432/searching
+      SEARCHING_PRINTS: /dados/prints
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      ALERTA_DESTINATARIOS: ${ALERTA_DESTINATARIOS:-}
+    volumes:
+      - prints:/dados/prints
+    depends_on:
+      - db
+    expose:
+      - "8000"
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: searching
+      POSTGRES_PASSWORD: ${POSTGRES_SENHA}
+      POSTGRES_DB: searching
+    volumes:
+      - pgdados:/var/lib/postgresql/data
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      SEARCHING_DOMINIO: ${SEARCHING_DOMINIO}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_dados:/data
+    depends_on:
+      - app
+volumes:
+  prints:
+  pgdados:
+  caddy_dados:

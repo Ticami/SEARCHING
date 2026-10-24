@@ -40,7 +40,20 @@ def caminho_db() -> Path:
     return Path(os.environ.get("SEARCHING_DB", DB_PADRAO))
 
 
+def url_banco_externo() -> str | None:
+    """PostgreSQL (ou outro) para vários usuários: SEARCHING_DATABASE_URL. Sem ela, SQLite local."""
+    url = (os.environ.get("SEARCHING_DATABASE_URL") or "").strip()
+    if url.startswith("postgres://"):  # forma antiga usada por alguns provedores
+        url = "postgresql://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://"):]
+    return url or None
+
+
 def criar_engine(caminho: str | Path | None = None) -> Engine:
+    externo = None if caminho else url_banco_externo()
+    if externo:
+        return create_engine(externo, pool_pre_ping=True)
     destino = Path(caminho) if caminho else caminho_db()
     if str(destino) != ":memory:":
         destino.parent.mkdir(parents=True, exist_ok=True)

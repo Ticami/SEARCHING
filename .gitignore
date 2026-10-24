@@ -17,6 +17,7 @@ venv/
 .env
 .env.*
 !.env.example
+deploy/hospedado.env
 
 # Dados gerados em execução
 backend/prints/

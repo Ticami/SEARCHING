@@ -81,7 +81,7 @@ def datas_com_prints(s: Session) -> list[dict]:
     linhas = s.execute(
         select(dia, func.count(Coleta.id), func.count(Coleta.caminho_print)).group_by(dia).order_by(dia.desc())
     ).all()
-    return [{"data": d, "total": total, "com_print": com_print} for d, total, com_print in linhas if com_print]
+    return [{"data": str(d), "total": total, "com_print": com_print} for d, total, com_print in linhas if com_print]  # str: PostgreSQL devolve date
 
 
 def galeria(s: Session, data=None, produto_id=None) -> list[dict]:

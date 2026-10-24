@@ -1,0 +1,5 @@
+# Proxy reverso com HTTPS automático (Let's Encrypt). Troque pelo seu domínio e aponte o DNS para este servidor.
+{$SEARCHING_DOMINIO} {
+	encode gzip
+	reverse_proxy app:8000
+}

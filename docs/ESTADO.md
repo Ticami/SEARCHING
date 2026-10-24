@@ -3,7 +3,7 @@
 Arquivo de continuidade: qualquer sessão nova deve ler isto primeiro e **atualizá-lo ao terminar cada tarefa** (mover o item
 para "Feito" com o hash do commit, ajustar "Em andamento" e "Próximos passos" e incluir o arquivo no mesmo commit da tarefa).
 
-Última atualização: Fases 1 a 3 do multiusuário prontas (contas/papéis, extensão hospedada, coordenação); push ainda não feito (testes: 278 passando).
+Última atualização: Multiusuário completo (Fases 0 a 4); push ainda não feito (testes: 287 passando).
 
 ## Resumo do projeto
 
@@ -43,18 +43,20 @@ relatórios. Dados 100% locais.
 | **Push** de tudo para o GitHub (branch de segurança `backup/antes-das-etapas` mantida) | `ca7b715` |
 | Multiusuário, Fase 0: `docs/DESENHO_MULTIUSUARIO.md` (extensão hospedada viável; modelo, matriz, pareamento) | `cdfcf5f` |
 | Multiusuário, Fase 1: contas, papéis deny-by-default, sessões/CSRF, bloqueio, recuperação de senha, 2FA, auditoria, CLI `searching.usuarios`, telas Login/Conta/Usuários | `b3c746c` |
-| Multiusuário, Fases 2 e 3 (no mesmo commit): extensão v2 (página de opções, servidor fixado em HTTPS, token por usuário, `autorizar` no servidor), intervalo de 3 s e limite por loja impostos pelo servidor, pausa após 2 BLOQUEIOS, atribuição de produtos, "em coleta por fulano", captura registrada em nome de quem coletou, token de leitura (BI), e2e `--hospedado` (escrito, **não executado**) | commit seguinte a `b3c746c` |
+| Multiusuário, Fases 2 e 3 (no mesmo commit): extensão v2 (página de opções, servidor fixado em HTTPS, token por usuário, `autorizar` no servidor), intervalo de 3 s e limite por loja impostos pelo servidor, pausa após 2 BLOQUEIOS, atribuição de produtos, "em coleta por fulano", captura registrada em nome de quem coletou, token de leitura (BI), e2e `--hospedado` (escrito, **não executado**) | `5832090` |
+| Multiusuário, Fase 4: PostgreSQL opcional (`SEARCHING_DATABASE_URL`), `searching.operacao` (backup, restauração, migrar-banco), logs JSON com request id, `Dockerfile`/`docker-compose.yml`/Caddy (**não construídos**), `docs/IMPLANTACAO.md` | commit seguinte a `5832090` |
 
 ## Em andamento
 
-Transformação em sistema multiusuário (`docs/DESENHO_MULTIUSUARIO.md`). Concluídas as Fases 0 a 3; falta a **Fase 4 (operação)**: guia de
-implantação, Docker/compose, PostgreSQL opcional, armazenamento de prints configurável, backup/restauração e logs estruturados.
-Decisão: extensão hospedada é viável, **plano B não foi usado**. Modo local segue idêntico (sem login).
-**Pendente de validação humana:** `python scripts/e2e_assistida.py` (local) e `... --hospedado` não foram rodados após a extensão v2
-(abrem janelas e baixam o Chrome for Testing, ~460 MB); a extensão só passou em `node --check` e nos testes do servidor.
+Nada no código. O sistema multiusuário (`docs/DESENHO_MULTIUSUARIO.md`, `docs/IMPLANTACAO.md`) está completo nas Fases 0 a 4; decisão: extensão
+hospedada é viável, **plano B não foi usado**; modo local segue idêntico (sem login).
+**Pendente de validação humana:** `python scripts/e2e_assistida.py` e `... --hospedado` não foram rodados após a extensão v2 (abrem
+janelas e baixam o Chrome for Testing, ~460 MB); `Dockerfile`/`docker-compose.yml` não foram construídos; PostgreSQL só foi exercitado
+pela via SQLite -> SQLite (não há servidor PostgreSQL nesta máquina).
 
 ## Próximos passos (sugestões)
 
+0. **Multiusuário, o que ficou de fora:** alertas por usuário e resumo semanal em Excel, abstração de fontes de dados (API/feed oficial), retenção/arquivamento, exportação/importação do espaço de trabalho (o backup cobre o essencial), prints em armazenamento de objetos, edição dos destinatários pela interface, áreas privadas por pessoa.
 1. **Validar os seletores reais da Magalu** na coleta assistida (PIX, vendedor, menu de pagamento/cartão 1x). Hoje só foram
    testados com HTML sintético e uma loja simulada. Opção: o usuário salva o HTML de um produto (F12, Copy outerHTML) para virar fixture.
 2. **Adaptador do Mercado Livre** com coleta automática (a busca abriu normal no coletor: 43 resultados; falta ver a página do anúncio).

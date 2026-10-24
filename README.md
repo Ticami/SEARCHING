@@ -162,6 +162,13 @@ Por padrão tudo é **local**: sem login, só `127.0.0.1`. Com `SEARCHING_MODO=h
 | `SEARCHING_MODO=hospedado` | Liga login, papéis e auditoria. |
 | `SEARCHING_URL_PUBLICA` | Endereço HTTPS do site (obrigatório), por exemplo `https://searching.suaempresa.com`. |
 | `SEARCHING_PROXIES=1` | Quantidade de proxies reversos confiáveis à frente (lê `X-Forwarded-*`). |
+| `SEARCHING_DATABASE_URL` | PostgreSQL para várias pessoas (`postgresql://usuario:senha@host/banco`); sem ela, SQLite. |
+| `SEARCHING_LOG_FORMATO` | `json` (padrão no hospedado) ou `texto`. |
+
+Guia completo (HTTPS obrigatório, segredos por variável de ambiente, `Dockerfile`/`docker-compose.yml`, PostgreSQL, backup e
+restauração, logs, lista de verificação): [`docs/IMPLANTACAO.md`](docs/IMPLANTACAO.md). Backup/restauração:
+`python -m searching.operacao backup|restaurar|migrar-banco`. Extensão (Chrome/Edge, servidor HTTPS e token por usuário): [`extensao/README.md`](extensao/README.md).
+Integração com planilhas/BI: cada usuário pode criar um **token somente leitura** em *Minha conta* (`Authorization: Bearer ...` nas rotas `GET`).
 
 ### Testes
 

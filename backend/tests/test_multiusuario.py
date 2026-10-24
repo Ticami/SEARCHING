@@ -200,7 +200,7 @@ def test_escrita_exige_csrf_e_origem(hosp):
 
 
 def test_host_de_fora_e_recusado(hosp):
-    r = hosp.server.app.test_client().get("/api/health", base_url="https://evil.com")
+    r = hosp.server.app.test_client().get("/api/links", base_url="https://evil.com")
     assert r.status_code == 403
 
 
@@ -390,3 +390,9 @@ def test_modo_hospedado_exige_url_https(monkeypatch):
     assert modo.url_publica({"SEARCHING_URL_PUBLICA": "https://searching.exemplo.com/"}) == "https://searching.exemplo.com"
     with pytest.raises(modo.ModoInvalido):
         modo.modo({"SEARCHING_MODO": "nuvem"})
+
+
+def test_health_aceita_host_interno_e_o_resto_nao(hosp):
+    c = hosp.server.app.test_client()
+    assert c.get("/api/health", base_url="http://127.0.0.1:8000").status_code == 200
+    assert c.get("/api/links", base_url="http://127.0.0.1:8000").status_code == 403
