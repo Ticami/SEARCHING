@@ -229,3 +229,19 @@ def test_cartao_1x_nao_confunde_com_11x_e_12x():
     so_parcelado = '<tr data-testid="payment-table-Cartão de crédito-item-10"><td>11x</td><td>R$ 363,54</td></tr>'
     assert MagaluAdapter.parse_cartao_1x(so_parcelado) is None
     assert MagaluAdapter.parse_cartao_1x("") is None
+
+
+
+def test_duas_paginas_bloqueadas_seguidas_param_de_abrir_paginas(s, produtos):
+    from searching.core.status import StatusColeta
+
+    ex = assistida.iniciar(s, stores=["magalu"], agora=datetime.now())["execucao_id"]
+    agora = datetime.now()
+    for i, chave in enumerate(("s25", "a17")):
+        s.add(Coleta(execucao_id=ex, produto_id=produtos[chave].id, coletado_em=agora - timedelta(minutes=1, seconds=i),
+                     status=StatusColeta.BLOQUEIO.value))
+    s.commit()
+    with pytest.raises(assistida.LimiteExcedido, match="bloqueou 2 páginas seguidas"):
+        assistida.autorizar_abertura(s, ex, produtos["s25"].id, agora=agora)
+    # passada a pausa, a loja volta a ser tentada
+    assert assistida.autorizar_abertura(s, ex, produtos["s25"].id, agora=agora + timedelta(minutes=11))["ok"]

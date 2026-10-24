@@ -2,6 +2,7 @@
 // A cada "navegar" (disparado por um clique seu na tela do SEARCHING): abre o produto na aba dedicada,
 // tira o print, lê a página, tenta abrir o menu de pagamento para ler o cartão 1x e envia tudo ao servidor local.
 // Não abre links por conta própria, não resolve captcha e não tenta esconder que é uma extensão.
+// Modo hospedado: o servidor (HTTPS) é fixado na página de opções; o token é por usuário e revogável.
 
 const VERSAO = chrome.runtime.getManifest().version;
 const SERVIDOR_PADRAO = "http://127.0.0.1:5000";
@@ -28,6 +29,37 @@ function hostPermitido(url) {
 async function config() {
   const c = await chrome.storage.local.get({ token: null, servidor: SERVIDOR_PADRAO, recorteTopoPx: 0 });
   return c;
+}
+
+const HOSTS_LOCAIS = ["127.0.0.1", "localhost"];
+
+// O servidor precisa ser HTTPS; http só vale para o próprio computador (modo local).
+function servidorValido(url) {
+  try {
+    const u = new URL(url);
+    if (u.protocol === "https:") return true;
+    return u.protocol === "http:" && HOSTS_LOCAIS.includes(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+const origemDe = (url) => new URL(url).origin;
+const ehLocal = (url) => HOSTS_LOCAIS.includes(new URL(url).hostname);
+
+// Antes de abrir qualquer página, o servidor confere sessão, intervalo mínimo, limite da loja e quem está coletando o produto.
+async function autorizarNoServidor(cfg, cmd) {
+  const resp = await fetch(`${cfg.servidor}/api/assistida/autorizar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Searching-Token": cfg.token },
+    body: JSON.stringify({ execucao_id: cmd.execucaoId, produto_id: cmd.produtoId }),
+  });
+  const corpo = await resp.json().catch(() => ({}));
+  if (resp.status === 401) {
+    await chrome.storage.local.set({ token: null }); // revogado ou inválido: força um novo pareamento
+    throw new Error("O servidor não aceita mais este pareamento (token revogado). Abra a tela Coleta assistida e pareie de novo.");
+  }
+  if (!resp.ok) throw new Error(corpo.error || `O servidor recusou abrir a página (${resp.status}).`);
 }
 
 function avisar(appTabId, dados) {
@@ -149,6 +181,9 @@ async function capturar(cmd, appTabId) {
   if (!cfg.token) throw new Error("Extensão sem token: abra a tela Coleta assistida do SEARCHING para parear.");
   const etapa = (nome, detalhe) => avisar(appTabId, { seq: cmd.seq, etapa: nome, detalhe });
 
+  etapa("autorizando");
+  await autorizarNoServidor(cfg, cmd);
+
   const { tabId, windowId } = await garantirAba();
   etapa("navegando", cmd.url);
   await chrome.tabs.update(tabId, { url: cmd.url, active: true });
@@ -228,16 +263,31 @@ async function navegar(cmd, sender) {
 
 chrome.runtime.onMessage.addListener((msg, sender, responder) => {
   (async () => {
+    const daPaginaDeOpcoes = !!sender.url && sender.url.startsWith(chrome.runtime.getURL("opcoes.html"));
     if (msg.tipo === "ping") {
       const c = await config();
-      return { ok: true, versao: VERSAO, pareado: !!c.token, janela: alvo.tabId != null };
+      return { ok: true, versao: VERSAO, pareado: !!c.token, janela: alvo.tabId != null, servidor: c.servidor };
     }
     if (msg.tipo === "configurar") {
-      await chrome.storage.local.set({
-        token: String(msg.token || ""),
-        servidor: msg.servidor || SERVIDOR_PADRAO,
-        recorteTopoPx: Math.max(0, Math.min(400, Number(msg.recorteTopoPx) || 0)),
-      });
+      // Só a página do SEARCHING do servidor JÁ FIXADO pode entregar o token; ela nunca troca o endereço do servidor.
+      // (Quem muda o servidor é a página de opções da extensão, por ação explícita da pessoa.)
+      const c = await config();
+      const origemDaPagina = sender.url ? origemDe(sender.url) : null;
+      const doServidorFixado = origemDaPagina && servidorValido(c.servidor) && origemDaPagina === origemDe(c.servidor);
+      const localComLocal = origemDaPagina && ehLocal(origemDaPagina) && ehLocal(c.servidor);
+      if (!daPaginaDeOpcoes && !doServidorFixado && !localComLocal) {
+        return { ok: false, erro: "Esta página não é o servidor configurado na extensão." };
+      }
+      const novo = {};
+      if (msg.token !== undefined) novo.token = String(msg.token || "");
+      if (msg.recorteTopoPx !== undefined) novo.recorteTopoPx = Math.max(0, Math.min(400, Number(msg.recorteTopoPx) || 0));
+      // modo local: o pareamento automático informa a porta do servidor local (sempre loopback)
+      if (localComLocal && msg.servidor && servidorValido(msg.servidor) && ehLocal(msg.servidor)) novo.servidor = origemDe(msg.servidor);
+      if (daPaginaDeOpcoes && msg.servidor !== undefined && servidorValido(msg.servidor)) {
+        if (origemDe(msg.servidor) !== origemDe(c.servidor)) novo.token = null; // outro servidor: o token antigo não vale
+        novo.servidor = origemDe(msg.servidor);
+      }
+      await chrome.storage.local.set(novo);
       return { ok: true };
     }
     if (msg.tipo === "navegar") return navegar(msg, sender);

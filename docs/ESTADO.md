@@ -3,7 +3,7 @@
 Arquivo de continuidade: qualquer sessão nova deve ler isto primeiro e **atualizá-lo ao terminar cada tarefa** (mover o item
 para "Feito" com o hash do commit, ajustar "Em andamento" e "Próximos passos" e incluir o arquivo no mesmo commit da tarefa).
 
-Última atualização: Fase 1 do multiusuário (contas, papéis, auditoria) pronta; push ainda não feito (testes: 254 passando).
+Última atualização: Fases 1 a 3 do multiusuário prontas (contas/papéis, extensão hospedada, coordenação); push ainda não feito (testes: 278 passando).
 
 ## Resumo do projeto
 
@@ -42,13 +42,16 @@ relatórios. Dados 100% locais.
 | Tarefa do Windows "SEARCHING - Coleta" removida a pedido do usuário (ação fora do repositório, conferida: não existe mais) | `cfe4efc` |
 | **Push** de tudo para o GitHub (branch de segurança `backup/antes-das-etapas` mantida) | `ca7b715` |
 | Multiusuário, Fase 0: `docs/DESENHO_MULTIUSUARIO.md` (extensão hospedada viável; modelo, matriz, pareamento) | `cdfcf5f` |
-| Multiusuário, Fase 1: contas, papéis deny-by-default, sessões/CSRF, bloqueio, recuperação de senha, 2FA, auditoria, CLI `searching.usuarios`, telas Login/Conta/Usuários | commit seguinte a `cdfcf5f` |
+| Multiusuário, Fase 1: contas, papéis deny-by-default, sessões/CSRF, bloqueio, recuperação de senha, 2FA, auditoria, CLI `searching.usuarios`, telas Login/Conta/Usuários | `b3c746c` |
+| Multiusuário, Fases 2 e 3 (no mesmo commit): extensão v2 (página de opções, servidor fixado em HTTPS, token por usuário, `autorizar` no servidor), intervalo de 3 s e limite por loja impostos pelo servidor, pausa após 2 BLOQUEIOS, atribuição de produtos, "em coleta por fulano", captura registrada em nome de quem coletou, token de leitura (BI), e2e `--hospedado` (escrito, **não executado**) | commit seguinte a `b3c746c` |
 
 ## Em andamento
 
-Transformação em sistema multiusuário (tarefa em fases, ver `docs/DESENHO_MULTIUSUARIO.md`). **Fase 1 concluída**; faltam Fase 2
-(extensão em modo hospedado: URL configurável, token por usuário, `autorizar`), Fase 3 (coordenação) e Fase 4 (operação: Docker,
-PostgreSQL, backup, logs). Decisão: extensão hospedada é viável, **plano B não foi usado**. Modo local segue idêntico (sem login).
+Transformação em sistema multiusuário (`docs/DESENHO_MULTIUSUARIO.md`). Concluídas as Fases 0 a 3; falta a **Fase 4 (operação)**: guia de
+implantação, Docker/compose, PostgreSQL opcional, armazenamento de prints configurável, backup/restauração e logs estruturados.
+Decisão: extensão hospedada é viável, **plano B não foi usado**. Modo local segue idêntico (sem login).
+**Pendente de validação humana:** `python scripts/e2e_assistida.py` (local) e `... --hospedado` não foram rodados após a extensão v2
+(abrem janelas e baixam o Chrome for Testing, ~460 MB); a extensão só passou em `node --check` e nos testes do servidor.
 
 ## Próximos passos (sugestões)
 

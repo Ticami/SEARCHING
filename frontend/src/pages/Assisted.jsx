@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "../auth.jsx";
 
 const INTERVALO_MS = 3000; // a extensão também impõe este intervalo mínimo entre páginas
 
 const ETAPAS = {
+  autorizando: "Pedindo autorização ao servidor…",
   navegando: "Abrindo a página no Chrome…",
   lendo: "Lendo a página…",
   menu: "Abrindo as opções de pagamento…",
@@ -32,6 +34,7 @@ async function api(url, corpo) {
 }
 
 export default function Assisted() {
+  const { modo } = useAuth();
   const [ext, setExt] = useState({ estado: "procurando" });
   const [sess, setSess] = useState(null);
   const [atualId, setAtualId] = useState(null);
@@ -42,6 +45,7 @@ export default function Assisted() {
   const [livreEm, setLivreEm] = useState(0);
   const [agora, setAgora] = useState(Date.now());
   const [msg, setMsg] = useState("");
+  const [foraDaFila, setForaDaFila] = useState([]);
   const [resumo, setResumo] = useState(null);
   const [recorte, setRecorte] = useState(() => Number(localStorage.getItem("assistida_recorte") || 0));
   const seqRef = useRef(0);
@@ -92,6 +96,7 @@ export default function Assisted() {
         } else if (d.etapa === "erro") {
           setAguardando(false);
           setMsg(d.detalhe || "Falha na captura.");
+          if (/pareie de novo/i.test(d.detalhe || "")) setExt({ estado: "ausente" }); // token revogado: mostra "Procurar de novo" (re-pareia)
         }
       }
     };
@@ -106,8 +111,17 @@ export default function Assisted() {
       try {
         const r = await enviarExt("ping");
         if (r && r.ok) {
-          const { token, servidor } = await api("/api/assistida/token");
-          await enviarExt("configurar", { token, servidor, recorteTopoPx: recorte });
+          if (modo === "hospedado") {
+            // token por usuário: só cria um novo se a extensão ainda não estiver pareada (ou se o antigo foi revogado)
+            const entrega = !r.pareado ? await api("/api/extensao/parear", {}).then(({ token }) => enviarExt("configurar", { token, recorteTopoPx: recorte })) : await enviarExt("configurar", { recorteTopoPx: recorte });
+            if (!entrega.ok) {
+              setExt({ estado: "outro_servidor", detalhe: entrega.erro, servidor: r.servidor });
+              return;
+            }
+          } else {
+            const { token, servidor } = await api("/api/assistida/token");
+            await enviarExt("configurar", { token, servidor, recorteTopoPx: recorte });
+          }
           setExt({ estado: "ok", versao: r.versao });
           return;
         }
@@ -117,7 +131,7 @@ export default function Assisted() {
       await new Promise((r) => setTimeout(r, 500));
     }
     setExt({ estado: "ausente" });
-  }, [enviarExt, recorte]);
+  }, [enviarExt, recorte, modo]);
 
   useEffect(() => {
     parear();
@@ -172,6 +186,7 @@ export default function Assisted() {
     try {
       const s = await api("/api/assistida/iniciar", { stores: ["magalu"] });
       setSess(s);
+      setForaDaFila((s.em_coleta_por_outros || []).map((x) => `${x.produto} (${x.por})`));
       setAtualId(null);
       const primeiro = s.itens.find((i) => !i.concluido);
       if (primeiro) await abrir(primeiro, s.execucao_id);
@@ -240,7 +255,7 @@ export default function Assisted() {
     const n = Math.max(0, Math.min(400, Number(valor) || 0));
     setRecorte(n);
     localStorage.setItem("assistida_recorte", String(n));
-    if (ext.estado === "ok") api("/api/assistida/token").then(({ token, servidor }) => enviarExt("configurar", { token, servidor, recorteTopoPx: n }));
+    if (ext.estado === "ok") enviarExt("configurar", { recorteTopoPx: n });
   };
 
   // ---------- tela ----------
@@ -311,10 +326,20 @@ export default function Assisted() {
               {ext.estado === "procurando" && "Procurando a extensão…"}
               {ext.estado === "ok" && `Extensão conectada (v${ext.versao})`}
               {ext.estado === "ausente" && "Extensão não detectada"}
+              {ext.estado === "outro_servidor" && "Extensão configurada para outro servidor"}
             </span>
           </div>
         </div>
 
+        {ext.estado === "outro_servidor" && (
+          <div className="card ghost stack mt-2">
+            <strong>A extensão aponta para outro servidor</strong>
+            <span className="note">
+              Servidor configurado na extensão: <code>{ext.servidor}</code>. Abra as opções da extensão (<code>chrome://extensions</code> ou{" "}
+              <code>edge://extensions</code> → Detalhes → Opções da extensão), informe o endereço deste site e recarregue esta página.
+            </span>
+          </div>
+        )}
         {ext.estado === "ausente" && (
           <div className="card ghost stack mt-2">
             <strong>Instale a extensão uma vez</strong>
@@ -330,6 +355,9 @@ export default function Assisted() {
           </div>
         )}
         {msg && <p className="status mt-2">{msg}</p>}
+        {foraDaFila.length > 0 && (
+          <p className="note mt-2">Ficaram fora da sua fila (em coleta por outra pessoa): {foraDaFila.join(", ")}</p>
+        )}
       </section>
 
       {resumo && (
@@ -358,6 +386,13 @@ export default function Assisted() {
             <li>Confira se o resultado preenchido bate com o print e aperte <strong>Próximo</strong> (ou espaço, ou a seta →).</li>
             <li>No fim, <strong>Encerrar</strong> fecha a execução e envia o resumo, se estiver ligado em Alertas.</li>
           </ol>
+          {modo === "hospedado" && (
+            <p className="note" role="note">
+              <strong>Privacidade:</strong> o print sai do <em>seu</em> navegador e fica guardado no servidor da equipe. Se você estiver logado na loja, ele
+              pode mostrar seu nome ou CEP. Use um perfil do navegador sem login na loja e/ou o recorte abaixo. Você só coleta os produtos
+              atribuídos a você, e o servidor registra quem fez cada captura.
+            </p>
+          )}
           <label className="row">
             <span className="muted">Cortar do print o topo da página (px), para não mostrar nome ou CEP logados:</span>
             <input type="number" min="0" max="400" style={{ width: 90 }} value={recorte} onChange={(e) => salvarRecorte(e.target.value)} />

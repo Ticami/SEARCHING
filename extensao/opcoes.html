@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>SEARCHING - Opções da extensão</title>
+  <style>
+    body { font: 15px system-ui, sans-serif; max-width: 640px; margin: 32px auto; padding: 0 16px; color: #1c2430; }
+    label { display: block; margin-top: 16px; font-weight: 600; }
+    input { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; font: inherit; }
+    button { margin-top: 20px; padding: 8px 16px; font: inherit; cursor: pointer; }
+    .nota { color: #5b6677; font-size: 13px; font-weight: 400; }
+    #estado { margin-top: 16px; font-weight: 600; }
+    .aviso { background: #fff7e0; border: 1px solid #f0d37a; padding: 10px 12px; border-radius: 6px; margin-top: 20px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>SEARCHING — extensão de coleta assistida</h1>
+  <p class="nota">Nada é enviado até você parear. A extensão só fala com o servidor abaixo e só abre as lojas permitidas, uma página por clique seu.</p>
+
+  <label>Endereço do servidor
+    <input id="servidor" placeholder="https://searching.suaempresa.com" autocomplete="off">
+    <span class="nota">Precisa ser HTTPS (http só vale para este computador: http://127.0.0.1:5000). Depois de salvo, só esta página muda o endereço.</span>
+  </label>
+
+  <label>Token de pareamento (opcional)
+    <input id="token" type="password" placeholder="cole aqui o token criado em Minha conta" autocomplete="off">
+    <span class="nota">Normalmente o pareamento é automático: entre no site e abra a tela Coleta assistida. Use este campo só se preferir colar o token.</span>
+  </label>
+
+  <label>Recorte do topo do print (pixels)
+    <input id="recorte" type="number" min="0" max="400" value="0">
+    <span class="nota">Corta a faixa de cima do print, onde algumas lojas mostram seu nome e CEP quando você está logado.</span>
+  </label>
+
+  <div class="aviso">Privacidade: o print sai do <b>seu</b> navegador e vai para o servidor. Se você estiver logado na loja, ele pode mostrar seu nome ou CEP.
+    Use um perfil do navegador sem login na loja e/ou o recorte acima.</div>
+
+  <button id="salvar">Salvar</button>
+  <button id="desparear" type="button">Desparear</button>
+  <div id="estado"></div>
+  <script src="opcoes.js"></script>
+</body>
+</html>

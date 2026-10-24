@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SEARCHING - Coleta assistida",
-  "version": "1.0.0",
-  "description": "Lê a página do produto que você abre pelo SEARCHING e envia preço e print ao sistema local. Uma página por clique seu.",
+  "version": "2.0.0",
+  "description": "Lê a página do produto que você abre pelo SEARCHING e envia preço e print ao seu servidor SEARCHING (local ou hospedado). Uma página por clique seu.",
   "permissions": [
     "tabs",
     "scripting",
@@ -11,6 +11,10 @@
   "host_permissions": [
     "<all_urls>"
   ],
+  "options_ui": {
+    "page": "opcoes.html",
+    "open_in_tab": true
+  },
   "background": {
     "service_worker": "background.js"
   },

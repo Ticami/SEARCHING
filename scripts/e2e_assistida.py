@@ -9,6 +9,9 @@ Nada é enviado a nenhuma loja real e os seus dados reais não são tocados (ban
 
 Abre janelas do Chrome na sua tela por cerca de um minuto.
 
+Com `--hospedado` o teste roda o MODO HOSPEDADO: o servidor serve o site (frontend/dist, gerado por `npm run build`), há login com
+um coletor de teste, o pareamento usa o token por usuário e o teste confere que a captura ficou registrada em nome dele.
+
 Observação: o Chrome oficial (a partir da versão 137) não carrega extensões por linha de comando. Por isso o teste usa o
 "Chrome for Testing", o build de testes do Google, que o Selenium baixa sozinho na primeira vez (cerca de 460 MB, no cache
 do Selenium; a variável SE_CACHE_PATH muda o local). O Chrome instalado no seu computador não é alterado.
@@ -32,7 +35,9 @@ from selenium.webdriver.common.keys import Keys
 RAIZ = Path(__file__).resolve().parents[1]
 BACKEND, FRONTEND, EXTENSAO = RAIZ / "backend", RAIZ / "frontend", RAIZ / "extensao"
 PORTA_LOJA = 5999
-PORTA_API, PORTA_APP = 5100, 5273  # portas próprias: não esbarram no programa que você já tenha aberto (5000 e 5173)
+HOSPEDADO = "--hospedado" in sys.argv
+PORTA_API, PORTA_APP = 5100, (5100 if HOSPEDADO else 5273)  # portas próprias: não esbarram no programa que você já tenha aberto (5000 e 5173)
+EMAIL_TESTE, SENHA_TESTE = "coletor@e2e.teste", "Senha-E2E-Forte-1"
 HOST_LOJA = f"www.magazineluiza.localhost:{PORTA_LOJA}"  # *.localhost resolve para 127.0.0.1 no Chrome
 
 PAGINA = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>{titulo}</title>
@@ -100,6 +105,44 @@ def http(url, corpo=None, metodo=None):
         return json.loads(r.read().decode())
 
 
+def consultar(tmp, sql):
+    import sqlite3
+
+    con = sqlite3.connect(tmp / "e2e.db")
+    try:
+        return con.execute(sql).fetchall()
+    finally:
+        con.close()
+
+
+def preparar_hospedado(tmp, env):
+    """Cria o coletor de teste e os produtos (atribuídos a ele) direto no banco temporário."""
+    codigo = f"""
+import json, sys
+from searching.auth import servico
+from searching.db import links as repo
+from searching.db.models import Atribuicao
+from searching.db.session import criar_engine, iniciar_banco
+f = iniciar_banco(criar_engine())
+with f() as s:
+    u = servico.criar_usuario(s, {EMAIL_TESTE!r}, 'Coletor E2E', 'coletor', {SENHA_TESTE!r})
+    for nome, link in json.loads(sys.argv[1]):
+        p = repo.criar(s, nome, link, 'Magazine Luiza')
+        s.flush()
+        s.add(Atribuicao(produto_id=p.id, usuario_id=u.id))
+    s.commit()
+"""
+    produtos = json.dumps([(n, f"http://{HOST_LOJA}{c}") for n, c in PRODUTOS])
+    subprocess.run([sys.executable, "-c", codigo, produtos], cwd=BACKEND, env=env, check=True)
+
+
+def entrar_pela_tela(driver):
+    campos = driver.find_elements("css selector", "input")
+    campos[0].send_keys(EMAIL_TESTE)
+    campos[1].send_keys(SENHA_TESTE)
+    clicar(driver, "Entrar")
+
+
 def _porta_ocupada(porta):
     import socket
 
@@ -147,10 +190,16 @@ def main():
     man = json.loads((ext / "manifest.json").read_text(encoding="utf-8"))
     man["host_permissions"] += [f"http://*.magazineluiza.localhost:{PORTA_LOJA}/*", f"http://127.0.0.1:{PORTA_API}/*"]
     man["content_scripts"][0]["matches"] += [f"http://localhost:{PORTA_APP}/*", f"http://127.0.0.1:{PORTA_APP}/*"]
+    if HOSPEDADO:  # na cópia de teste o "servidor fixado" é o do teste (a pessoa de verdade o informa na página de opções)
+        man["content_scripts"][0]["matches"] = [m for m in man["content_scripts"][0]["matches"] if "5173" not in m]
     (ext / "manifest.json").write_text(json.dumps(man, indent=2), encoding="utf-8")
     bg = (ext / "background.js").read_text(encoding="utf-8")
     assert 'const HOSTS_PERMITIDOS = ["magazineluiza.com.br", "magazinevoce.com.br"]' in bg
-    (ext / "background.js").write_text(bg.replace('"magazinevoce.com.br"]', '"magazinevoce.com.br", "magazineluiza.localhost"]'), encoding="utf-8")
+    bg = bg.replace('"magazinevoce.com.br"]', '"magazinevoce.com.br", "magazineluiza.localhost"]')
+    if HOSPEDADO:
+        assert 'const SERVIDOR_PADRAO = "http://127.0.0.1:5000"' in bg
+        bg = bg.replace('const SERVIDOR_PADRAO = "http://127.0.0.1:5000"', f'const SERVIDOR_PADRAO = "http://localhost:{PORTA_API}"')
+    (ext / "background.js").write_text(bg, encoding="utf-8")
 
     ocupadas = [p for p in (PORTA_LOJA, PORTA_API, PORTA_APP) if _porta_ocupada(p)]
     if ocupadas:
@@ -161,16 +210,28 @@ def main():
 
     env = {**os.environ, "SEARCHING_PORT": str(PORTA_API), "SEARCHING_API": f"http://127.0.0.1:{PORTA_API}",
            "SEARCHING_ORIGENS": f"http://localhost:{PORTA_APP},http://127.0.0.1:{PORTA_APP}", "SEARCHING_DB": str(tmp / "e2e.db"), "SEARCHING_PRINTS": str(tmp / "prints"), "SEARCHING_TOKEN": str(tmp / "token"),
+           **({"SEARCHING_MODO": "hospedado", "SEARCHING_URL_PUBLICA": f"http://localhost:{PORTA_API}"} if HOSPEDADO else {}),
            # e-mail inexistente: o teste nunca envia mensagem de verdade
            "SMTP_HOST": "smtp.invalid", "SMTP_USER": "teste@example.com", "SMTP_PASSWORD": "x", "ALERTA_DESTINATARIOS": "teste@example.com"}
     servidor = subprocess.Popen([sys.executable, "server.py"], cwd=BACKEND, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    vite = subprocess.Popen(["npm.cmd", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(PORTA_APP), "--strictPort"], cwd=FRONTEND, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    vite = None
+    if HOSPEDADO:  # o próprio servidor entrega o site: gera o frontend/dist antes
+        subprocess.run(["npm.cmd", "run", "build"], cwd=FRONTEND, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        vite = subprocess.Popen(["npm.cmd", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(PORTA_APP), "--strictPort"], cwd=FRONTEND, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     driver = None
     try:
         esperar(f"http://127.0.0.1:{PORTA_API}/api/health")
-        esperar(f"http://127.0.0.1:{PORTA_APP}/")
-        for nome, caminho in PRODUTOS:
-            http(f"http://127.0.0.1:{PORTA_API}/api/links", {"nome": nome, "link": f"http://{HOST_LOJA}{caminho}", "loja": "Magazine Luiza"})
+        if HOSPEDADO:
+            servidor.terminate()  # o banco é preparado com o servidor parado; depois ele sobe de novo
+            servidor.wait(10)
+            preparar_hospedado(tmp, env)
+            servidor = subprocess.Popen([sys.executable, "server.py"], cwd=BACKEND, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            esperar(f"http://localhost:{PORTA_API}/api/health")
+        else:
+            esperar(f"http://127.0.0.1:{PORTA_APP}/")
+            for nome, caminho in PRODUTOS:
+                http(f"http://127.0.0.1:{PORTA_API}/api/links", {"nome": nome, "link": f"http://{HOST_LOJA}{caminho}", "loja": "Magazine Luiza"})
         print(f"[ok] servidor, frontend e loja simulada no ar; {len(PRODUTOS)} produtos cadastrados")
 
         opcoes = Options()
@@ -179,6 +240,11 @@ def main():
         opcoes.add_argument("--window-size=1500,1150")
         driver = webdriver.Chrome(options=opcoes)
         driver.get(f"http://localhost:{PORTA_APP}/assisted")
+        if HOSPEDADO:
+            esperar_texto(driver, "Esqueci a senha", 20)
+            entrar_pela_tela(driver)
+            esperar_texto(driver, "Coleta assistida", 20)
+            print("[ok] login do coletor de teste pela tela")
         # guarda os eventos que a extensão manda à tela (andamento e avisos), para diagnosticar e conferir
         driver.execute_script("window.__ev=[]; window.addEventListener('message', e => { if (e.data && e.data.origem==='searching-ext' && e.data.tipo==='evento') window.__ev.push(e.data); })")
 
@@ -209,8 +275,14 @@ def main():
         assert "Nada foi forçado" in tela
         print("[ok] 3º produto: a loja simulada bloqueou (403) e a tela mostrou BLOQUEIO, sem insistir")
 
-        sessao = http(f"http://127.0.0.1:{PORTA_API}/api/assistida/sessao")
-        status = [i["coleta"]["status"] for i in sessao["itens"]]
+        if HOSPEDADO:
+            status = [s for (s,) in consultar(tmp, "select status from coletas order by id")]
+            quem = {u for (u,) in consultar(tmp, "select distinct coletado_por_id from coletas")}
+            assert len(quem) == 1 and None not in quem, quem
+            print("[ok] todas as capturas ficaram registradas em nome do coletor")
+        else:
+            sessao = http(f"http://127.0.0.1:{PORTA_API}/api/assistida/sessao")
+            status = [i["coleta"]["status"] for i in sessao["itens"]]
         assert status == ["OK", "OK", "BLOQUEIO"], status
         eventos = driver.execute_script("return window.__ev")
         avisos = [e.get("detalhe") for e in eventos if e.get("etapa") == "aviso"]
@@ -250,8 +322,11 @@ def main():
             time.sleep(0.3)
         assert driver.execute_script("return document.querySelector('[role=alert]') === null"), "o aviso deveria sumir quando não há mais erros"
         print("[ok] Refazer pelo aviso: PIX R$ 3.167,12 lido e o aviso sumiu")
-        sessao = http(f"http://127.0.0.1:{PORTA_API}/api/assistida/sessao")
-        assert [i["coleta"]["status"] for i in sessao["itens"]] == ["OK", "OK", "OK"]
+        if HOSPEDADO:
+            assert [s for (s,) in consultar(tmp, "select status from coletas order by id")][-1] == "OK"
+        else:
+            sessao = http(f"http://127.0.0.1:{PORTA_API}/api/assistida/sessao")
+            assert [i["coleta"]["status"] for i in sessao["itens"]] == ["OK", "OK", "OK"]
         assert len(list((tmp / "prints").rglob("*.png"))) == 4  # a falha e a coleta refeita guardam um print cada
         pedidos = [t for t, c in ACESSOS if c != "/favicon.ico"]
         folgas = [round(b - a, 1) for a, b in zip(pedidos, pedidos[1:])]
@@ -260,8 +335,11 @@ def main():
         clicar(driver, "Encerrar")
         tela = esperar_texto(driver, "Execução encerrada", 20)
         assert "3 de 3 com sucesso" in tela, tela[-500:]
-        hist = http(f"http://127.0.0.1:{PORTA_API}/api/historico")
-        assert [h["PIX_CENTAVOS"] for h in hist] == [379900, 119900, None, 316712], hist
+        if HOSPEDADO:
+            pix = [p for (p,) in consultar(tmp, "select preco_pix_centavos from coletas order by id")]
+        else:
+            pix = [h["PIX_CENTAVOS"] for h in http(f"http://127.0.0.1:{PORTA_API}/api/historico")]
+        assert pix == [379900, 119900, None, 316712], pix
         print("[ok] execução encerrada: 3 de 3 com sucesso; a falha anterior continua no histórico")
         print("\nTUDO CERTO: o fluxo assistido funciona de ponta a ponta.")
     finally:

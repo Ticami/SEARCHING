@@ -289,6 +289,22 @@ def pular(s: Session, execucao_id: int, produto_id: int, usuario_id: int | None 
     return sessao(s, usuario_id)
 
 
+PAUSA_APOS_BLOQUEIOS_MIN = 10
+
+
+def _parar_se_a_loja_bloqueou(s: Session, execucao_id: int, agora: datetime) -> None:
+    """Dois BLOQUEIOS seguidos (configurável): para de abrir páginas por um tempo, sem insistir na loja."""
+    limite = int(_config(s).get("bloqueios_para_interromper", "2"))
+    ultimas = s.scalars(
+        select(Coleta).where(Coleta.execucao_id == execucao_id).order_by(Coleta.id.desc()).limit(limite)
+    ).all()
+    if len(ultimas) == limite and all(c.status == StatusColeta.BLOQUEIO.value for c in ultimas):
+        if agora - ultimas[0].coletado_em < timedelta(minutes=PAUSA_APOS_BLOQUEIOS_MIN):
+            raise LimiteExcedido(
+                f"A loja bloqueou {limite} páginas seguidas. Paramos de insistir: tente de novo em {PAUSA_APOS_BLOQUEIOS_MIN} minutos.", 429
+            )
+
+
 def autorizar_abertura(
     s: Session, execucao_id: int, produto_id: int, usuario_id: int | None = None, agora: datetime | None = None,
 ) -> dict:
@@ -300,6 +316,7 @@ def autorizar_abertura(
     _, produto = _validar(s, execucao_id, produto_id, usuario_id)
     if usuario_id is not None and produto_id in em_coleta(s, agora, exceto_usuario_id=usuario_id):
         raise LimiteExcedido("Este produto está em coleta por outra pessoa.", 409)
+    _parar_se_a_loja_bloqueou(s, execucao_id, agora)
     consulta = select(AberturaPagina.em).order_by(AberturaPagina.em.desc()).limit(1)
     if usuario_id is not None:
         consulta = consulta.where(AberturaPagina.usuario_id == usuario_id)
