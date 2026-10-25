@@ -245,3 +245,14 @@ def test_duas_paginas_bloqueadas_seguidas_param_de_abrir_paginas(s, produtos):
         assistida.autorizar_abertura(s, ex, produtos["s25"].id, agora=agora)
     # passada a pausa, a loja volta a ser tentada
     assert assistida.autorizar_abertura(s, ex, produtos["s25"].id, agora=agora + timedelta(minutes=11))["ok"]
+
+
+def test_captura_com_a_pagina_real_da_magalu_vira_coleta_ok(s, produtos, tmp_path):
+    """A página salva do Chrome (S25 de verdade) passa pela validação inteira: PIX, cartão 1x, vendedor e status OK."""
+    sess = assistida.iniciar(s, stores=["magalu"])
+    r = assistida.registrar_captura(
+        s, sess["execucao_id"], produtos["s25"].id,
+        {"html": _html("magalu_real_produto.html"), "url_final": URL_S25, "screenshot": PNG},
+        notificador=Notificador(carregar_config=lambda: SMTP, enviar=lambda *a, **k: None), prints_dir=tmp_path,
+    )
+    assert (r["status"], r["pix"], r["cartao_1x"], r["vendedor"]) == ("OK", "R$ 3.899,00", "R$ 4.332,22", "Magalu"), r

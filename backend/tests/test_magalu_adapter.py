@@ -2,6 +2,7 @@ from pathlib import Path
 
 from searching.adapters import adaptador_para
 from searching.adapters.magalu import MagaluAdapter
+from searching.core.precos import PRECO_RE
 
 FIXTURES = Path(__file__).parent / "fixtures"
 URL_PRODUTO = "https://www.magazineluiza.com.br/celular-samsung-galaxy-s25/p/abc123/te/gs25/"
@@ -82,3 +83,23 @@ def test_parse_busca_deduplica_e_ignora_links_que_nao_sao_produto():
 def test_roteamento_por_dominio():
     assert isinstance(adaptador_para("https://www.magazinevoce.com.br/loja/x/p/abc/"), MagaluAdapter)
     assert adaptador_para("https://www.amazon.com.br/dp/B0") is None
+
+
+# ---------- página REAL salva do Chrome (Ctrl+S, 2026-10-25) ----------
+def test_pagina_real_da_magalu():
+    """Cobre o layout de verdade: título no h1, PIX em price-value, vendedor em seller-delivery-text e cartão 1x escrito '01x'."""
+    html = (FIXTURES / "magalu_real_produto.html").read_text(encoding="utf-8")
+    leitura = MagaluAdapter().ler_html(html, "https://www.magazineluiza.com.br/celular-samsung-galaxy-s25/p/abc123/te/gs25/")
+    assert leitura.titulo.startswith("Celular Samsung Galaxy S25 5G 256GB")
+    assert leitura.vendedor == "Magalu"
+    assert PRECO_RE.search(leitura.pix_texto).group(0).replace("\xa0", " ") == "R$ 3.899,00"
+    assert leitura.cartao_texto.replace("\xa0", " ") == "R$ 4.332,22"  # 1x no cartão de crédito, não as parcelas com juros
+    assert not (leitura.bloqueio or leitura.pagina_404 or leitura.indisponivel)
+
+
+def test_cartao_1x_aceita_01x_mas_nao_11x():
+    linha = lambda n: f'<table><tr data-testid="payment-table-Cartão de crédito-item"><td>{n} de R$ 100,00</td></tr></table>'  # noqa: E731
+    assert MagaluAdapter.parse_cartao_1x(linha("01x")) == "R$ 100,00"
+    assert MagaluAdapter.parse_cartao_1x(linha("1x")) == "R$ 100,00"
+    assert MagaluAdapter.parse_cartao_1x(linha("11x")) is None
+    assert MagaluAdapter.parse_cartao_1x(linha("21x")) is None

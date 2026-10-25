@@ -58,7 +58,7 @@ Docker (imagem construída; compose com PostgreSQL 16 + Caddy HTTPS no ar; login
 (SQLite -> PostgreSQL, sequências OK) contra PostgreSQL real; `scripts/e2e_opcoes_extensao.py` (página de opções, registro dinâmico do
 ponte.js, servidor fixado, Desparear) contra o stack HTTPS. Correções feitas nesse caminho: `.dockerignore` (sem ele o `node_modules` do
 Windows quebrava a build e `.env`/dados iriam para a imagem), usuário do contêiner com home (gunicorn), espera do banco no compose.
-**Ainda não validado:** coleta na Magalu **real** (seletores só testados com HTML sintético; aguardando o HTML salvo pelo usuário).
+**Magalu real (HTML salvo pelo usuário em 2026-10-25, `backend/tests/fixtures/magalu_real_produto.html`):** título (h1), PIX (`price-value`) e menu de pagamento batem com os seletores; achados e corrigidos: o vendedor está em `seller-delivery-text` (antes ficava vazio) e a Magalu escreve **"01x"** no cartão (o regex só aceitava "1x", o que deixaria o cartão 1x sempre vazio). Teste novo cobre a página real inteira até `status OK`. **Ainda não validado:** a coleta ao vivo com a extensão na Magalu real (o usuário deve rodar e relatar) e a página de produto que traz outro layout (vendedor terceiro, indisponível).
 
 ## Próximos passos (sugestões)
 

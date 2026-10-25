@@ -15,7 +15,7 @@ from .base import CandidatoBruto, LojaAdapter
 # --- Seletores e textos da Magazine Luiza (único lugar a mexer se o layout mudar) ---
 SEL_TITULO = ["h1[data-testid='heading-product-title']", "h1[itemprop='name']", "h1"]
 SEL_PRECO_PIX = "[data-testid='price-value']"
-SEL_VENDEDOR = ["[data-testid='seller-info-name']", "[data-testid='seller-name']"]
+SEL_VENDEDOR = ["[data-testid='seller-delivery-text']", "[data-testid='seller-info-name']", "[data-testid='seller-name']"]  # o primeiro é o da página real
 SEL_ABRIR_PAGAMENTO = "div[data-testid='rave-payment-card-link'][role='button']"
 SEL_MODAL = "[role='dialog'], [data-testid='payment-modal']"
 SEL_ABA_CREDITO = "span[data-testid='tab-header-item-Cartão de crédito']"
@@ -42,7 +42,7 @@ SEL_TITULO_CARD = "[data-testid='product-title']"
 MAX_RESULTADOS_BUSCA = 20
 
 _PRODUTO_RE = re.compile(r"/p/[^/]+/")
-_UMA_PARCELA_RE = re.compile(r"(?<!\d)1x")  # "1x", mas não "11x" nem "12x"
+_UMA_PARCELA_RE = re.compile(r"(?<!\d)0?1x")  # "1x" ou "01x" (a Magalu real escreve 01x), mas não "11x" nem "12x"
 _CODIGO_RE = re.compile(r"/p/([^/]+)/")
 
 
