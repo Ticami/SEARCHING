@@ -242,6 +242,15 @@ class Atribuicao(Base):
     usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), primary_key=True)
 
 
+class Assinatura(Base):
+    """Usuário que quer receber por e-mail os alertas (e o resumo semanal) de um produto."""
+
+    __tablename__ = "assinaturas"
+
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), primary_key=True)
+    produto_id: Mapped[int] = mapped_column(ForeignKey("produtos.id"), primary_key=True)
+
+
 class AberturaPagina(Base):
     """Cada página de loja que a extensão foi autorizada a abrir (intervalo mínimo e limite global por loja)."""
 

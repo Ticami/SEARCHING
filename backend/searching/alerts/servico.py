@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..core.status import StatusColeta
 from ..db.models import Alerta, Coleta, Produto
+from . import destinatarios as dest
 from .config import regra_do_produto
 from .email import (
     ConfigSMTP,
@@ -90,8 +91,9 @@ def processar_coleta(s: Session, produto: Produto, coleta: Coleta, cfg: dict, no
     )
     try:
         smtp = notificador.carregar_config()
-        alerta.destinatario = ", ".join(smtp.destinatarios)
-        notificador.enviar(construir_alerta(produto, coleta, decisao, base, smtp.remetente, smtp.destinatarios), smtp)
+        para = dest.efetivos(s, smtp.destinatarios, produto.id)
+        alerta.destinatario = ", ".join(para)
+        notificador.enviar(construir_alerta(produto, coleta, decisao, base, smtp.remetente, para), smtp)
         alerta.sucesso = True
     except Exception as exc:
         alerta.erro = f"{type(exc).__name__}: {exc}"
@@ -113,8 +115,9 @@ def reenviar_pendentes(s: Session, notificador: Notificador, dias: int = 3) -> i
         decisao = Decisao(a.preco_anterior_centavos, a.preco_atual_centavos, a.queda_pct, tuple((a.motivos or "queda").split(",")))
         try:
             smtp = notificador.carregar_config()
-            notificador.enviar(construir_alerta(produto, coleta, decisao, a.base_preco or "pix", smtp.remetente, smtp.destinatarios), smtp)
-            a.sucesso, a.erro, a.enviado_em, a.destinatario = True, None, datetime.now(), ", ".join(smtp.destinatarios)
+            para = dest.efetivos(s, smtp.destinatarios, produto.id)
+            notificador.enviar(construir_alerta(produto, coleta, decisao, a.base_preco or "pix", smtp.remetente, para), smtp)
+            a.sucesso, a.erro, a.enviado_em, a.destinatario = True, None, datetime.now(), ", ".join(para)
             reenviados += 1
         except Exception as exc:
             a.erro = f"{type(exc).__name__}: {exc}"
@@ -122,23 +125,25 @@ def reenviar_pendentes(s: Session, notificador: Notificador, dias: int = 3) -> i
     return reenviados
 
 
-def enviar_resumo(resumo: dict, notificador: Notificador, quando: datetime | None = None) -> tuple[bool, str]:
-    """Resumo diário (RF-27). Devolve (enviado, mensagem)."""
+def enviar_resumo(resumo: dict, notificador: Notificador, quando: datetime | None = None, s: Session | None = None) -> tuple[bool, str]:
+    """Resumo diário (RF-27). Devolve (enviado, mensagem). Com `s`, usa a lista de destinatários editada na interface."""
     try:
         smtp = notificador.carregar_config()
-        notificador.enviar(construir_resumo(resumo, quando or datetime.now(), smtp.remetente, smtp.destinatarios), smtp)
+        para = dest.efetivos(s, smtp.destinatarios) if s is not None else smtp.destinatarios
+        notificador.enviar(construir_resumo(resumo, quando or datetime.now(), smtp.remetente, para), smtp)
         return True, "Resumo enviado."
     except Exception as exc:
         log.warning("resumo diário não enviado: %s", exc)
         return False, f"{type(exc).__name__}: {exc}"
 
 
-def enviar_teste(notificador: Notificador | None = None) -> tuple[bool, str]:
+def enviar_teste(notificador: Notificador | None = None, s: Session | None = None) -> tuple[bool, str]:
     """E-mail de teste (RF-28): confirma credenciais e destinatários sem depender de uma queda real."""
     notificador = notificador or Notificador()
     try:
         smtp = notificador.carregar_config()
-        notificador.enviar(construir_teste(smtp.remetente, smtp.destinatarios), smtp)
-        return True, f"E-mail de teste enviado para {', '.join(smtp.destinatarios)}."
+        para = dest.efetivos(s, smtp.destinatarios) if s is not None else smtp.destinatarios
+        notificador.enviar(construir_teste(smtp.remetente, para), smtp)
+        return True, f"E-mail de teste enviado para {', '.join(para)}."
     except Exception as exc:
         return False, f"{type(exc).__name__}: {exc}"

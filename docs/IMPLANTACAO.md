@@ -102,6 +102,17 @@ python -m searching.operacao reter-prints --dias 90 --simular   # só mostra o q
 
 O histórico de preços fica; só o arquivo do print sai (ou vai para `SEARCHING_PRINTS_ARQUIVO`).
 
+## 8.1 Resumo semanal por e-mail
+
+Ligue em *Alertas → Enviar resumo semanal* e agende uma vez por semana (cron / Agendador de Tarefas):
+
+```bash
+python -m searching.operacao resumo-semanal              # só envia se passaram ~6 dias do último
+python -m searching.operacao resumo-semanal --simular    # mostra para quem iria
+```
+
+Cada pessoa recebe a planilha dos produtos que assinou; a lista de destinatários recebe tudo.
+
 ## 9. Logs
 
 Uma linha JSON por evento, na saída padrão (o Docker/provedor recolhe). Cada requisição registra `request_id` (também devolvido no

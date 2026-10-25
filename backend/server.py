@@ -16,6 +16,7 @@ from searching import web_conta
 from searching.auth import guarda
 from searching.alerts import config as alertas_config
 from searching.alerts import email as alertas_email
+from searching.alerts import destinatarios as alertas_dest
 from searching.alerts import regras as alertas_regras
 from searching.alerts import servico as alertas_servico
 from searching.core.precos import formatar_brl
@@ -339,6 +340,7 @@ def listar_alertas():
         ).all()
         return jsonify({
             "smtp": alertas_email.status_config(),
+            "destinatarios": {"configurados": alertas_dest.configurados(s)},
             "config": alertas_config.ler_config(s),
             "alertas": [_alerta_json(a, p) for a, p in linhas],
         })
@@ -396,9 +398,22 @@ def salvar_regra_alerta(produto_id):
         s.commit()
         return jsonify({"message": "Regra salva.", "regra": _regra_json(p)})
 
+@app.route("/api/alertas/destinatarios", methods=["PUT"])
+def salvar_destinatarios():
+    """Quem recebe os e-mails (a senha do SMTP continua só no .env). Lista vazia = volta a valer o .env."""
+    data = request.get_json(force=True, silent=True) or {}
+    with db_fabrica() as s:
+        try:
+            lista = alertas_dest.salvar(s, data.get("destinatarios", []))
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        s.commit()
+        return jsonify({"message": "Destinatários salvos.", "configurados": lista})
+
 @app.route("/api/alertas/teste", methods=["POST"])
 def enviar_email_de_teste():
-    ok, mensagem = alertas_servico.enviar_teste()
+    with db_fabrica() as s:
+        ok, mensagem = alertas_servico.enviar_teste(app.config["NOTIFICADOR"], s=s)
     return jsonify({"ok": ok, "message": mensagem}), (200 if ok else 500)
 
 # ==============================

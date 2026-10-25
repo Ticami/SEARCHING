@@ -3,7 +3,7 @@
 Arquivo de continuidade: qualquer sessão nova deve ler isto primeiro e **atualizá-lo ao terminar cada tarefa** (mover o item
 para "Feito" com o hash do commit, ajustar "Em andamento" e "Próximos passos" e incluir o arquivo no mesmo commit da tarefa).
 
-Última atualização: Docker/PostgreSQL/HTTPS da extensão validados; falta a Magalu real; push ainda não feito (testes: 305 passando).
+Última atualização: funcionalidades do tópico 3 (destinatários, assinaturas, resumo semanal, histórico de links) prontas; push ainda não feito (testes: 321 passando).
 
 ## Resumo do projeto
 
@@ -62,7 +62,8 @@ Windows quebrava a build e `.env`/dados iriam para a imagem), usuário do contê
 
 ## Próximos passos (sugestões)
 
-0. **Multiusuário, o que ficou de fora:** alertas por usuário e resumo semanal em Excel, abstração de fontes de dados (API/feed oficial), arquivamento do histórico de preços, exportação/importação do espaço de trabalho (o backup cobre o essencial), prints em armazenamento de objetos, edição dos destinatários pela interface, áreas privadas por pessoa.
+0. **Feito depois do multiusuário (tópico 3):** tela do histórico de trocas de link; destinatários de e-mail editáveis pela interface (senha continua no `.env`); alertas por usuário (assinaturas por produto); resumo semanal em Excel (`searching.operacao resumo-semanal`).
+0. **Ainda de fora, com o motivo:** abstração de fontes de dados (API/feed oficial da Magalu: depende de acesso de parceiro; refatoração grande sem uma segunda fonte para validar); adaptador do Mercado Livre (falta o HTML real da página do anúncio, como foi feito com a Magalu); exportar/importar o espaço de trabalho em formato próprio e arquivamento do histórico de preços (o backup/restauração já cobre o essencial; arquivar exige decidir o que vale apagar); prints em armazenamento de objetos; áreas privadas por pessoa (só desenhadas, ver `docs/DESENHO_MULTIUSUARIO.md` 7.2).
 1. **Validar os seletores reais da Magalu** na coleta assistida (PIX, vendedor, menu de pagamento/cartão 1x). Hoje só foram
    testados com HTML sintético e uma loja simulada. Opção: o usuário salva o HTML de um produto (F12, Copy outerHTML) para virar fixture.
 2. **Adaptador do Mercado Livre** com coleta automática (a busca abriu normal no coletor: 43 resultados; falta ver a página do anúncio).

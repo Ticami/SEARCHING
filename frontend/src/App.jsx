@@ -8,6 +8,7 @@ import Curves from "./pages/Curves"; // nova rota
 import Review from "./pages/Review";
 import Alerts from "./pages/Alerts";
 import Assisted from "./pages/Assisted";
+import LinkHistory from "./pages/LinkHistory";
 import { Conta, Login, Usuarios, useAuth } from "./auth.jsx";
 import "./styles/global.css";
 
@@ -138,6 +139,7 @@ export default function App() {
             <Route path="/curves" element={<Curves />} />
             <Route path="/prints" element={<Prints />} />
             <Route path="/links" element={<Links />} />
+            <Route path="/links/historico" element={<LinkHistory />} />
             <Route path="/review" element={<Review />} />
             <Route path="/alerts" element={<Alerts />} />
             <Route path="/assisted" element={pode("coletor") ? <Assisted /> : <Home />} />

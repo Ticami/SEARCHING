@@ -145,6 +145,21 @@ def construir_resumo(resumo: dict, quando, remetente: str, destinatarios) -> Ema
     return _mensagem(assunto, remetente, destinatarios, texto, _template("resumo.html", dados))
 
 
+def construir_resumo_semanal(remetente: str, destinatarios, quando, dias: int, linhas: str, excel: bytes) -> EmailMessage:
+    texto = (
+        f"Resumo dos últimos {dias} dias ({quando:%d/%m/%Y}).\n\n"
+        f"Variação do PIX por produto (maiores quedas primeiro):\n{linhas}\n\n"
+        "A planilha em anexo traz todas as coletas do período, com o caminho do print.\n"
+    )
+    html = "<p>" + escape(texto).replace("\n", "<br>") + "</p>"
+    msg = _mensagem(f"[SEARCHING] Resumo semanal ({quando:%d/%m/%Y})", remetente, destinatarios, texto, html)
+    msg.add_attachment(
+        excel, maintype="application", subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=f"searching_semana_{quando:%Y%m%d}.xlsx",
+    )
+    return msg
+
+
 def construir_teste(remetente: str, destinatarios) -> EmailMessage:
     texto = "Este é um e-mail de teste do SEARCHING. Se você o recebeu, os alertas por e-mail estão configurados corretamente."
     html = f"<p>{escape(texto)}</p>"

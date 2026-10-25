@@ -343,6 +343,7 @@ def executar_coleta(
                 }
             log.info("[exec %s] finalizada: %s", exec_id, resumo)
         if cfg["resumo_diario_email"] == "1" and resumo["total"] > 0:
-            enviado, mensagem = alertas.enviar_resumo(resumo, notificador)
+            with fabrica() as s_resumo:
+                enviado, mensagem = alertas.enviar_resumo(resumo, notificador, s=s_resumo)
             log.info("[exec %s] resumo por e-mail: %s", exec_id, mensagem if not enviado else "enviado")
         return resumo

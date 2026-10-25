@@ -145,10 +145,10 @@ def test_regra_de_alerta_por_produto(api):
 
 def test_email_de_teste_pela_api(api, monkeypatch):
     c, server = api
-    monkeypatch.setattr(server.alertas_servico, "enviar_teste", lambda: (True, "E-mail de teste enviado para eu@x.com."))
+    monkeypatch.setattr(server.alertas_servico, "enviar_teste", lambda *a, **k: (True, "E-mail de teste enviado para eu@x.com."))
     r = c.post("/api/alertas/teste")
     assert r.status_code == 200 and r.get_json()["ok"]
-    monkeypatch.setattr(server.alertas_servico, "enviar_teste", lambda: (False, "ConfigEmailIncompleta: faltam SMTP_USER"))
+    monkeypatch.setattr(server.alertas_servico, "enviar_teste", lambda *a, **k: (False, "ConfigEmailIncompleta: faltam SMTP_USER"))
     r = c.post("/api/alertas/teste")
     assert r.status_code == 500 and "SMTP_USER" in r.get_json()["message"]
 

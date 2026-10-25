@@ -375,5 +375,5 @@ def encerrar(
         _gravar(s, None, usuario_id)
     s.commit()
     if notificador is not None and _config(s)["resumo_diario_email"] == "1" and resumo["coletados"] > 0:
-        alertas.enviar_resumo({**resumo, "total": resumo["coletados"]}, notificador)
+        alertas.enviar_resumo({**resumo, "total": resumo["coletados"]}, notificador, s=s)
     return resumo

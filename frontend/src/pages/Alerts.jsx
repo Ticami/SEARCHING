@@ -22,7 +22,9 @@ async function chamar(url, metodo, corpo) {
 }
 
 export default function Alerts() {
-  const { pode } = useAuth();
+  const { pode, modo } = useAuth();
+  const [assinados, setAssinados] = useState([]);
+  const [listaEmails, setListaEmails] = useState("");
   const [dados, setDados] = useState(null);
   const [regras, setRegras] = useState([]);
   const [cfg, setCfg] = useState({});
@@ -35,6 +37,11 @@ export default function Alerts() {
       const dadosJson = await a.json();
       setDados(dadosJson);
       setCfg(dadosJson.config || {});
+      setListaEmails(((dadosJson.destinatarios || {}).configurados || []).join(", "));
+      if (modo === "hospedado") {
+        const as = await fetch("/api/minhas-assinaturas");
+        if (as.ok) setAssinados((await as.json()).produtos || []);
+      }
       const regrasJson = await r.json();
       setRegras(Array.isArray(regrasJson) ? regrasJson : []);
     } catch (e) {
@@ -51,6 +58,20 @@ export default function Alerts() {
     const { ok, json } = await chamar("/api/alertas/config", "PUT", cfg);
     setMsg(ok ? json.message : json.error || "Falha ao salvar.");
     if (ok) setCfg(json.config);
+  };
+
+  const salvarDestinatarios = async () => {
+    setMsg("");
+    const { ok, json } = await chamar("/api/alertas/destinatarios", "PUT", { destinatarios: listaEmails });
+    setMsg(ok ? json.message : json.error || "Falha ao salvar.");
+    if (ok) setListaEmails(json.configurados.join(", "));
+  };
+
+  const alternarAssinatura = async (produtoId) => {
+    const novos = assinados.includes(produtoId) ? assinados.filter((x) => x !== produtoId) : [...assinados, produtoId];
+    const { ok, json } = await chamar("/api/minhas-assinaturas", "PUT", { produtos: novos });
+    if (ok) setAssinados(json.produtos);
+    else setMsg(json.error || "Não foi possível salvar a assinatura.");
   };
 
   const testarEmail = async () => {
@@ -114,6 +135,21 @@ export default function Alerts() {
             </p>
           </>
         )}
+        <label className="stack">
+          <span>Destinatários dos alertas (separe por vírgula). Em branco, valem os do arquivo <code>.env</code>.</span>
+          <input
+            value={listaEmails}
+            placeholder={smtp?.destinatarios ? smtp.destinatarios.join(", ") : "gestor@empresa.com, outra@empresa.com"}
+            onChange={(e) => setListaEmails(e.target.value)}
+            disabled={!pode("admin")}
+          />
+        </label>
+        <div className="toolbar">
+          <button className="btn secondary" onClick={salvarDestinatarios} disabled={!pode("admin")}>
+            Salvar destinatários
+          </button>
+        </div>
+        <p className="note">A senha do e-mail nunca fica no banco: continua só no <code>.env</code>.</p>
       </div>
 
       {/* ===== Regras globais ===== */}
@@ -177,6 +213,14 @@ export default function Alerts() {
             />
             <span>Enviar e-mail de resumo ao fim de cada coleta</span>
           </label>
+          <label className="row">
+            <input
+              type="checkbox"
+              checked={cfg.resumo_semanal_email === "1"}
+              onChange={(e) => setCfg({ ...cfg, resumo_semanal_email: e.target.checked ? "1" : "0" })}
+            />
+            <span>Enviar resumo semanal em Excel (agende <code>python -m searching.operacao resumo-semanal</code> uma vez por semana)</span>
+          </label>
         </div>
 
         <div className="toolbar">
@@ -204,6 +248,7 @@ export default function Alerts() {
                 <th>Queda mín. (%)</th>
                 <th>Comparar com</th>
                 <th>Avisar abaixo de (R$)</th>
+                {modo === "hospedado" && <th>Receber no meu e-mail</th>}
                 <th></th>
               </tr>
             </thead>
@@ -236,6 +281,17 @@ export default function Alerts() {
                       onChange={(e) => editarRegra(r.produto_id, "alerta_preco_alvo", e.target.value)}
                     />
                   </td>
+                  {modo === "hospedado" && (
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`Receber alertas de ${r.nome} no meu e-mail`}
+                        checked={assinados.includes(r.produto_id)}
+                        onChange={() => alternarAssinatura(r.produto_id)}
+                        disabled={!pode("coletor")}
+                      />
+                    </td>
+                  )}
                   <td>
                     <button className="btn secondary" onClick={() => salvarRegra(r)} disabled={!pode("coletor")}>
                       Salvar
@@ -245,7 +301,7 @@ export default function Alerts() {
               ))}
               {regras.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="muted">
+                  <td colSpan={6} className="muted">
                     Nenhum produto ativo.
                   </td>
                 </tr>

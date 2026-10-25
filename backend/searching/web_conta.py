@@ -9,7 +9,7 @@ from .alerts import email as alertas_email
 from .auth import guarda, servico
 from .auth.guarda import COOKIE
 from . import retencao
-from .db.models import Atribuicao, Auditoria, Produto, SessaoLogin, TokenApi, Usuario
+from .db.models import Assinatura, Atribuicao, Auditoria, Produto, SessaoLogin, TokenApi, Usuario
 
 bp = Blueprint("conta", __name__)
 
@@ -195,6 +195,60 @@ def desativar_2fa():
         servico.auditar(s, "2fa_desativado", u, ip=guarda.ip_do_cliente())
         s.commit()
     return jsonify({"message": "Verificação em duas etapas desativada."})
+
+
+# ---------- assinaturas de alerta (quem recebe o e-mail de cada produto) ----------
+def _ids_validos(s, valores) -> set[int]:
+    ids = {int(i) for i in (valores or []) if str(i).isdigit()}
+    return set(s.scalars(select(Produto.id).where(Produto.id.in_(ids)))) if ids else set()
+
+
+def _gravar_assinaturas(s, usuario_id: int, produtos: set[int]) -> None:
+    for a in s.scalars(select(Assinatura).where(Assinatura.usuario_id == usuario_id)):
+        if a.produto_id not in produtos:
+            s.delete(a)
+    atuais = set(s.scalars(select(Assinatura.produto_id).where(Assinatura.usuario_id == usuario_id)))
+    for pid in produtos - atuais:
+        s.add(Assinatura(usuario_id=usuario_id, produto_id=pid))
+
+
+@bp.route("/api/minhas-assinaturas", methods=["GET"])
+def minhas_assinaturas():
+    with _fabrica()() as s:
+        return jsonify({"produtos": sorted(s.scalars(select(Assinatura.produto_id).where(Assinatura.usuario_id == g.usuario.id)))})
+
+
+@bp.route("/api/minhas-assinaturas", methods=["PUT"])
+def salvar_minhas_assinaturas():
+    """Produtos cujos alertas e resumo semanal a pessoa quer receber por e-mail (no endereço da própria conta)."""
+    with _fabrica()() as s:
+        produtos = _ids_validos(s, _corpo().get("produtos"))
+        _gravar_assinaturas(s, g.usuario.id, produtos)
+        servico.auditar(s, "assinaturas_alteradas", g.usuario, detalhe={"produtos": sorted(produtos)}, ip=guarda.ip_do_cliente())
+        s.commit()
+    return jsonify({"message": "Assinaturas salvas.", "produtos": sorted(produtos)})
+
+
+@bp.route("/api/assinaturas", methods=["GET"])
+def listar_assinaturas():
+    with _fabrica()() as s:
+        mapa: dict[int, list[int]] = {}
+        for a in s.scalars(select(Assinatura)):
+            mapa.setdefault(a.usuario_id, []).append(a.produto_id)
+        return jsonify(mapa)
+
+
+@bp.route("/api/usuarios/<int:usuario_id>/assinaturas", methods=["PUT"])
+def salvar_assinaturas_do_usuario(usuario_id):
+    with _fabrica()() as s:
+        alvo = s.get(Usuario, usuario_id)
+        if alvo is None:
+            return jsonify({"error": "Usuário não encontrado."}), 404
+        produtos = _ids_validos(s, _corpo().get("produtos"))
+        _gravar_assinaturas(s, usuario_id, produtos)
+        servico.auditar(s, "assinaturas_alteradas_por_admin", g.usuario, alvo=alvo.email, detalhe={"produtos": sorted(produtos)}, ip=guarda.ip_do_cliente())
+        s.commit()
+    return jsonify({"message": "Assinaturas salvas.", "produtos": sorted(produtos)})
 
 
 # ---------- sessões ativas ----------

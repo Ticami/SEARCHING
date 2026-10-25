@@ -13,13 +13,14 @@ CHAVES_ALERTA = (
     "alerta_base_comparacao",
     "alerta_dias_janela",
     "resumo_diario_email",
+    "resumo_semanal_email",
 )
 
 
 def validar(chave: str, valor) -> str:
     """Normaliza e valida um valor de configuração; lança ValueError com mensagem para o usuário."""
     texto = str(valor).strip().replace(",", ".")
-    if chave in ("alertas_ativos", "resumo_diario_email"):
+    if chave in ("alertas_ativos", "resumo_diario_email", "resumo_semanal_email"):
         if texto.lower() in ("1", "true", "sim"):
             return "1"
         if texto.lower() in ("0", "false", "nao", "não"):

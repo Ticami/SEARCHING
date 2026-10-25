@@ -120,6 +120,13 @@ Algumas lojas, como a Magazine Luiza, recusam navegador controlado por programa.
 
 Tudo o que vem depois é igual à coleta automática: validação de título, status, preço suspeito, alertas por e-mail com o print e relatórios. Intervalo mínimo de 3 segundos entre páginas, uma página por clique.
 
+### Destinatários, assinaturas, resumo semanal e histórico de links
+
+- **Destinatários** dos alertas: editáveis na tela *Alertas* (admin); em branco, valem os do `.env`. A senha do SMTP nunca vai para o banco.
+- **Assinaturas** (modo hospedado): cada coletor marca na tela *Alertas* os produtos cujo alerta quer receber no próprio e-mail.
+- **Resumo semanal em Excel**: `python -m searching.operacao resumo-semanal`, agendado 1x por semana (liga em *Alertas*).
+- **Histórico de trocas de link** (tela *Links → Histórico*): todas as trocas, manuais ou automáticas, com botão para reverter.
+
 ### Alertas por e-mail
 
 1. Copie `.env.example` para `.env` (na raiz; o arquivo nunca vai para o Git) e preencha. No Gmail, ative a verificação em duas etapas e crie uma **senha de app** em https://myaccount.google.com/apppasswords.

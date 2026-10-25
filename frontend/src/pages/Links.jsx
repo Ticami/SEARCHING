@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 
 export default function Links() {
@@ -73,6 +74,7 @@ export default function Links() {
             <span className="eyebrow">Catálogo monitorado</span>
             <h2>Links Monitorados</h2>
           </div>
+          <Link className="btn secondary" to="/links/historico">Histórico de trocas de link</Link>
         </div>
 
         <div className="card ghost stack">

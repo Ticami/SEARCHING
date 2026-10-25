@@ -88,6 +88,22 @@ Produtos atribuídos a usuários; a fila de um coletor contém só o que lhe foi
 pessoa fica fora da fila ("em coleta por fulano"). Limite global por loja: `limite_loja_hora` (padrão 120 aberturas/hora): excedido, o servidor
 nega a abertura (429) e registra `limite_loja` na auditoria, visível ao admin.
 
+## 7.1 Alertas por usuário e resumo semanal
+
+Cada usuário pode **assinar produtos** (tela Alertas): os e-mails de queda daquele produto vão para a lista de destinatários **mais** os
+assinantes. A lista de destinatários é editável pelo admin na interface (vazia = vale `ALERTA_DESTINATARIOS` do `.env`; a senha do SMTP
+nunca sai do `.env`). O leitor continua sem escrever: quem assina por ele é o admin (`PUT /api/usuarios/<id>/assinaturas`). O **resumo
+semanal em Excel** (`python -m searching.operacao resumo-semanal`, agendado 1x por semana, ligado em Alertas) manda a planilha de tudo
+para a lista e, para cada assinante, só dos produtos dele.
+
+## 7.2 Áreas privadas por pessoa (desenhado, NÃO implementado)
+
+Hoje há um espaço de trabalho compartilhado com papéis. Para áreas privadas, o caminho seria: coluna `espaco_id` em `produtos`, `usuarios`
+(ou tabela de associação com papel por espaço), filtro por espaço em toda consulta (`listar_ativos`, `historico`, `galeria`, `saude`,
+`alertas`, `atribuicoes`) e nos prints (`prints/<espaco>/<data>/`), papel avaliado **por espaço**, e `espaco_id` nas sessões de coleta, nos
+tokens e na auditoria. Migração: tudo que existe vai para o espaço 1. É uma mudança transversal (toda rota passa a depender do espaço),
+por isso ficou para uma etapa própria, com testes de isolamento entre espaços antes de qualquer outra coisa.
+
 ## 8. Migração
 
 Banco existente: `iniciar_banco` cria tabelas e colunas novas sozinho. Dados atuais ficam no espaço compartilhado; coletas antigas têm

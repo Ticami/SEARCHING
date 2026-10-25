@@ -21,7 +21,7 @@ from pathlib import Path
 
 from sqlalchemy import create_engine, func, insert, select, text
 
-from .db.models import Base
+from .db.models import Base, Configuracao
 from .db.session import BACKEND_DIR, PRINTS_DIR, caminho_db, criar_engine, iniciar_banco, url_banco_externo
 
 VERSAO_FORMATO = 1
@@ -156,6 +156,10 @@ def main(argv: list[str] | None = None, saida=print) -> int:
     ret = sub.add_parser("reter-prints", help="apaga (ou arquiva) prints mais antigos que N dias")
     ret.add_argument("--dias", type=int, help="padrão: o configurado (0 = não faz nada)")
     ret.add_argument("--simular", action="store_true")
+    sem = sub.add_parser("resumo-semanal", help="envia o resumo semanal em Excel (agende 1x por semana)")
+    sem.add_argument("--dias", type=int, default=7)
+    sem.add_argument("--forcar", action="store_true", help="envia mesmo que já tenha enviado esta semana")
+    sem.add_argument("--simular", action="store_true", help="só mostra para quem iria")
     m = sub.add_parser("migrar-banco")
     m.add_argument("--destino", required=True)
     m.add_argument("--origem", type=Path)
@@ -166,6 +170,18 @@ def main(argv: list[str] | None = None, saida=print) -> int:
         elif args.cmd == "restaurar":
             res = restaurar(args.arquivo, args.confirmar)
             saida(f"Restaurado ({res['prints_restaurados']} prints). Banco anterior guardado em: {res['banco_anterior'] or 'não havia'}")
+        elif args.cmd == "resumo-semanal":
+            from .alerts import semanal
+            from .alerts.servico import Notificador
+
+            with iniciar_banco(criar_engine())() as s:
+                if s.get(Configuracao, "resumo_semanal_email") is None or s.get(Configuracao, "resumo_semanal_email").valor != "1":
+                    saida("Resumo semanal desligado (ligue em Alertas).")
+                    return 0
+                r = semanal.enviar(s, Notificador(), dias=args.dias, forcar=args.forcar, simular=args.simular)
+            saida(f"Resumo semanal{' (simulação)' if args.simular else ''}: enviados {r['enviados'] or 'ninguém'}; "
+                  f"falhas {r['falhas'] or 'nenhuma'}" + (f"; pulado: {r['pulado']}" if r["pulado"] else ""))
+            return 1 if r["falhas"] else 0
         elif args.cmd == "reter-prints":
             from . import retencao
 
