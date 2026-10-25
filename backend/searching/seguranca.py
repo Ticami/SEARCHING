@@ -63,6 +63,21 @@ def origens_permitidas(env: dict | None = None, porta: int = PORTA_PADRAO) -> fr
     return frozenset(origens)
 
 
+def ids_extensao_permitidos(env: dict | None = None) -> frozenset[str]:
+    """SEARCHING_EXTENSAO_IDS: ids oficiais da extensão (Chrome e Edge têm ids diferentes), separados por vírgula."""
+    env = os.environ if env is None else env
+    return frozenset(i.strip() for i in (env.get("SEARCHING_EXTENSAO_IDS") or "").split(",") if i.strip())
+
+
+def extensao_autorizada(origem: str | None, env: dict | None = None) -> bool:
+    """Sem lista configurada, vale só o token. Com lista, a chamada da extensão precisa vir de chrome-extension://<id da lista>."""
+    ids = ids_extensao_permitidos(env)
+    if not ids:
+        return True
+    prefixo = "chrome-extension://"
+    return bool(origem) and origem.startswith(prefixo) and origem[len(prefixo):].rstrip("/") in ids
+
+
 def host_permitido(cabecalho_host: str | None, env: dict | None = None) -> bool:
     """Evita DNS rebinding: o cabeçalho Host precisa ser um endereço local (ou, hospedado, o domínio público)."""
     if not cabecalho_host:

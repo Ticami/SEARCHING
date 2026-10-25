@@ -4,13 +4,14 @@ from types import SimpleNamespace
 
 from flask import current_app, g, jsonify, request
 
-from .. import assistida, modo
+from .. import assistida, modo, seguranca
 from . import politicas as pol
-from . import servico
+from . import limite, servico
 
 COOKIE = "searching_sessao"
 METODOS_SEGUROS = ("GET", "HEAD", "OPTIONS")
 ROTAS_DA_TROCA_DE_SENHA = ("conta.trocar_senha", "conta.eu", "conta.logout")
+ROTAS_DO_2FA = ROTAS_DA_TROCA_DE_SENHA + ("conta.iniciar_2fa", "conta.ativar_2fa")
 
 # No modo local não há login: quem acessa o 127.0.0.1 é o administrador (como sempre foi).
 USUARIO_LOCAL = SimpleNamespace(id=None, email="local", nome="Uso local", papel="admin", local=True, deve_trocar_senha=False)
@@ -52,9 +53,38 @@ def exigir_dono(produto_id: int):
     return _erro("Este produto não está atribuído a você.", 403)
 
 
+def _limitar():
+    """Limite de requisições por minuto (por usuário; sem login, por IP). Devolve a resposta 429 ou None."""
+    if request.method == "OPTIONS" or request.path == "/api/health":
+        return None
+    lim = limite.limites()
+    if request.endpoint == "exportar_historico":
+        categoria = "exportar"
+    elif request.method not in METODOS_SEGUROS:
+        categoria = "escrita"
+    else:
+        categoria = "leitura"
+    dono = ("u", g.usuario.id) if getattr(g, "usuario", None) is not None else ("ip", ip_do_cliente())
+    espera = current_app.config["LIMITADOR"].permitir((categoria, *dono), lim[categoria])
+    if espera is None:
+        return None
+    resposta = jsonify({"error": "Muitas requisições. Aguarde um pouco e tente de novo.", "aguardar_s": round(espera, 1)})
+    resposta.status_code = 429
+    resposta.headers["Retry-After"] = str(int(espera) + 1)
+    return resposta
+
+
 def instalar(app) -> None:
+    app.config["LIMITADOR"] = limite.Limitador()
+
     @app.before_request
     def aplicar_politica():
+        resposta = _aplicar_politica()
+        if modo.hospedado():  # modo local: uma pessoa só, sem limite
+            return _limitar() or resposta
+        return resposta
+
+    def _aplicar_politica():
         g.usuario, g.sessao, g.token = None, None, None
         if request.method == "OPTIONS" or request.endpoint is None:
             return None
@@ -64,6 +94,8 @@ def instalar(app) -> None:
         hospedado = modo.hospedado()
         if hospedado and politica.so_local:
             return _erro("Indisponível no modo hospedado: a coleta acontece pela extensão, no computador de cada pessoa.", 404)
+        if politica.acesso == pol.EXTENSAO and not seguranca.extensao_autorizada(request.headers.get("Origin")):
+            return _erro("Esta extensão não está autorizada neste servidor (SEARCHING_EXTENSAO_IDS).", 403)
         if not hospedado:
             g.usuario = USUARIO_LOCAL
             if request.endpoint.startswith("conta.") and request.endpoint not in ("conta.modo", "conta.eu"):
@@ -101,6 +133,10 @@ def instalar(app) -> None:
                 g.usuario, g.sessao = _destacar(s, u), sessao
                 if u.deve_trocar_senha and request.endpoint not in ROTAS_DA_TROCA_DE_SENHA:
                     return _erro("Troque a senha provisória antes de continuar.", 403)
+                if servico.exige_2fa(u) and not u.totp_ativo and request.endpoint not in ROTAS_DO_2FA:
+                    resposta = jsonify({"error": "Administradores precisam ativar a verificação em duas etapas (Minha conta).", "codigo": "2fa_obrigatorio"})
+                    resposta.status_code = 403
+                    return resposta
                 if politica.acesso == pol.LOGADO:
                     return None
                 if servico.nivel(u.papel) < servico.nivel(politica.acesso):

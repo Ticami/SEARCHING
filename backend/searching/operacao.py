@@ -153,6 +153,9 @@ def main(argv: list[str] | None = None, saida=print) -> int:
     r = sub.add_parser("restaurar")
     r.add_argument("arquivo", type=Path)
     r.add_argument("--confirmar", action="store_true")
+    ret = sub.add_parser("reter-prints", help="apaga (ou arquiva) prints mais antigos que N dias")
+    ret.add_argument("--dias", type=int, help="padrão: o configurado (0 = não faz nada)")
+    ret.add_argument("--simular", action="store_true")
     m = sub.add_parser("migrar-banco")
     m.add_argument("--destino", required=True)
     m.add_argument("--origem", type=Path)
@@ -163,6 +166,13 @@ def main(argv: list[str] | None = None, saida=print) -> int:
         elif args.cmd == "restaurar":
             res = restaurar(args.arquivo, args.confirmar)
             saida(f"Restaurado ({res['prints_restaurados']} prints). Banco anterior guardado em: {res['banco_anterior'] or 'não havia'}")
+        elif args.cmd == "reter-prints":
+            from . import retencao
+
+            with iniciar_banco(criar_engine())() as s:
+                r = retencao.aplicar(s, args.dias, args.simular)
+            saida(f"Retenção de {r['dias']} dia(s){' (simulação)' if r['simulacao'] else ''}: "
+                  f"{r['removidos']} removido(s), {r['arquivados']} arquivado(s), {r['ausentes']} já ausente(s).")
         else:
             for tabela, n in migrar_banco(args.destino, args.origem).items():
                 saida(f"{tabela}: {n} linha(s)")

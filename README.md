@@ -164,6 +164,10 @@ Por padrão tudo é **local**: sem login, só `127.0.0.1`. Com `SEARCHING_MODO=h
 | `SEARCHING_PROXIES=1` | Quantidade de proxies reversos confiáveis à frente (lê `X-Forwarded-*`). |
 | `SEARCHING_DATABASE_URL` | PostgreSQL para várias pessoas (`postgresql://usuario:senha@host/banco`); sem ela, SQLite. |
 | `SEARCHING_LOG_FORMATO` | `json` (padrão no hospedado) ou `texto`. |
+| `SEARCHING_2FA_ADMIN` | 2FA obrigatório para administradores (padrão `1`). |
+| `SEARCHING_EXTENSAO_IDS` | Só aceita capturas da(s) extensão(ões) com estes ids, além do token. |
+| `SEARCHING_RETENCAO_PRINTS_DIAS` | Apaga prints mais velhos que N dias (0 = nunca). |
+| `SEARCHING_LIMITE_REQ_MIN` | Limite de requisições por minuto por usuário (padrão 600; escritas 120). |
 
 Guia completo (HTTPS obrigatório, segredos por variável de ambiente, `Dockerfile`/`docker-compose.yml`, PostgreSQL, backup e
 restauração, logs, lista de verificação): [`docs/IMPLANTACAO.md`](docs/IMPLANTACAO.md). Backup/restauração:

@@ -79,6 +79,8 @@ temporizador, não encadeia páginas e não esconde que é uma extensão.
 - **Revogação imediata**: o servidor confere o token a cada chamada. Desativar ou rebaixar o usuário também invalida o token.
 - **Servidor fixado**: a extensão só envia dados ao endereço configurado nas opções. A página do SEARCHING só consegue entregar o
   token se estiver nesse mesmo endereço.
+- **Lista de ids** (opcional, recomendada): com `SEARCHING_EXTENSAO_IDS` no servidor, só capturas vindas de `chrome-extension://<id oficial>`
+  são aceitas, mesmo com token válido. O id da loja do Chrome e o do Edge Add-ons são diferentes; coloque os dois.
 - **CORS/Origin**: o servidor não libera CORS para a extensão. Ele aceita a chamada porque ela traz um token válido no cabeçalho
   (algo que outro site não consegue enviar); sem token, qualquer `Origin` de fora é recusada.
 

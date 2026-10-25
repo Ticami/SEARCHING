@@ -8,7 +8,8 @@ from . import modo
 from .alerts import email as alertas_email
 from .auth import guarda, servico
 from .auth.guarda import COOKIE
-from .db.models import Atribuicao, Auditoria, Produto, TokenApi, Usuario
+from . import retencao
+from .db.models import Atribuicao, Auditoria, Produto, SessaoLogin, TokenApi, Usuario
 
 bp = Blueprint("conta", __name__)
 
@@ -91,7 +92,10 @@ def eu():
         return jsonify({"error": "Entre para continuar."}), 401
     with _fabrica()() as s:
         atribuidos = list(s.scalars(select(Atribuicao.produto_id).where(Atribuicao.usuario_id == g.usuario.id)))
-    return jsonify({"modo": "hospedado", "usuario": _json_usuario(g.usuario), "csrf": g.sessao.csrf if g.sessao else None, "atribuidos": atribuidos})
+    return jsonify({
+        "modo": "hospedado", "usuario": _json_usuario(g.usuario), "csrf": g.sessao.csrf if g.sessao else None, "atribuidos": atribuidos,
+        "precisa_2fa": servico.exige_2fa(g.usuario) and not g.usuario.totp_ativo,
+    })
 
 
 @bp.route("/api/auth/trocar-senha", methods=["POST"])
@@ -180,6 +184,8 @@ def ativar_2fa():
 
 @bp.route("/api/auth/2fa/desativar", methods=["POST"])
 def desativar_2fa():
+    if servico.exige_2fa(g.usuario):
+        return jsonify({"error": "A verificação em duas etapas é obrigatória para administradores."}), 409
     with _fabrica()() as s:
         u = s.get(Usuario, g.usuario.id)
         try:
@@ -189,6 +195,92 @@ def desativar_2fa():
         servico.auditar(s, "2fa_desativado", u, ip=guarda.ip_do_cliente())
         s.commit()
     return jsonify({"message": "Verificação em duas etapas desativada."})
+
+
+# ---------- sessões ativas ----------
+def _json_sessao(x: SessaoLogin, atual_id=None, usuarios=None) -> dict:
+    return {
+        "id": x.id, "usuario_id": x.usuario_id, "usuario": (usuarios or {}).get(x.usuario_id),
+        "criada_em": x.criada_em.isoformat(timespec="seconds"), "ultimo_uso": x.ultimo_uso.isoformat(timespec="seconds"),
+        "ip": x.ip, "navegador": x.user_agent, "atual": x.id == atual_id,
+    }
+
+
+@bp.route("/api/minhas-sessoes", methods=["GET"])
+def minhas_sessoes():
+    with _fabrica()() as s:
+        return jsonify([_json_sessao(x, g.sessao.id if g.sessao else None) for x in servico.sessoes_ativas(s, g.usuario.id)])
+
+
+@bp.route("/api/minhas-sessoes/<int:sessao_id>", methods=["DELETE"])
+def encerrar_minha_sessao(sessao_id):
+    with _fabrica()() as s:
+        x = s.get(SessaoLogin, sessao_id)
+        if x is None or x.usuario_id != g.usuario.id:
+            return jsonify({"error": "Sessão não encontrada."}), 404
+        x.revogada = True
+        servico.auditar(s, "sessao_encerrada", g.usuario, alvo=f"sessão {x.id}", ip=guarda.ip_do_cliente())
+        s.commit()
+    resposta = jsonify({"message": "Sessão encerrada."})
+    if g.sessao is not None and g.sessao.id == sessao_id:
+        resposta.delete_cookie(COOKIE, path="/")
+    return resposta
+
+
+@bp.route("/api/minhas-sessoes/encerrar-outras", methods=["POST"])
+def encerrar_outras_sessoes():
+    with _fabrica()() as s:
+        servico.revogar_sessoes_do_usuario(s, g.usuario.id, exceto_id=g.sessao.id if g.sessao else None)
+        servico.auditar(s, "sessoes_encerradas", g.usuario, alvo="todas as outras", ip=guarda.ip_do_cliente())
+        s.commit()
+    return jsonify({"message": "As outras sessões foram encerradas."})
+
+
+@bp.route("/api/sessoes", methods=["GET"])
+def listar_sessoes():
+    with _fabrica()() as s:
+        nomes = {u.id: u.email for u in s.scalars(select(Usuario))}
+        return jsonify([_json_sessao(x, g.sessao.id if g.sessao else None, nomes) for x in servico.sessoes_ativas(s)])
+
+
+@bp.route("/api/sessoes/<int:sessao_id>", methods=["DELETE"])
+def encerrar_sessao(sessao_id):
+    with _fabrica()() as s:
+        x = s.get(SessaoLogin, sessao_id)
+        if x is None:
+            return jsonify({"error": "Sessão não encontrada."}), 404
+        x.revogada = True
+        servico.auditar(s, "sessao_encerrada_por_admin", g.usuario, alvo=f"sessão {x.id} (usuário {x.usuario_id})", ip=guarda.ip_do_cliente())
+        s.commit()
+    return jsonify({"message": "Sessão encerrada. A pessoa precisa entrar de novo."})
+
+
+# ---------- retenção dos prints ----------
+@bp.route("/api/retencao", methods=["GET"], endpoint="retencao")
+def retencao_atual():
+    with _fabrica()() as s:
+        return jsonify({"dias": retencao.dias_configurados(s)})
+
+
+@bp.route("/api/retencao", methods=["PUT"])
+def salvar_retencao():
+    with _fabrica()() as s:
+        try:
+            retencao.salvar_dias(s, int(_corpo().get("dias", -1)))
+        except (ValueError, TypeError) as e:
+            return jsonify({"error": str(e) or "Informe o número de dias."}), 400
+        servico.auditar(s, "retencao_alterada", g.usuario, detalhe={"dias": _corpo().get("dias")}, ip=guarda.ip_do_cliente())
+        s.commit()
+        return jsonify({"dias": retencao.dias_configurados(s)})
+
+
+@bp.route("/api/retencao/aplicar", methods=["POST"])
+def aplicar_retencao():
+    with _fabrica()() as s:
+        resultado = retencao.aplicar(s, simular=bool(_corpo().get("simular")))
+        servico.auditar(s, "retencao_aplicada", g.usuario, detalhe=resultado, ip=guarda.ip_do_cliente())
+        s.commit()
+        return jsonify(resultado)
 
 
 # ---------- tokens próprios ----------

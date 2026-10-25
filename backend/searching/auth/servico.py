@@ -262,7 +262,28 @@ def redefinir_com_token(s: Session, puro: str, nova: str, agora: datetime | None
     return u
 
 
+# ---------- sessões ativas ----------
+def sessoes_ativas(s: Session, usuario_id: int | None = None, agora: datetime | None = None) -> list[SessaoLogin]:
+    agora = agora or datetime.now()
+    consulta = select(SessaoLogin).where(
+        SessaoLogin.revogada.is_(False), SessaoLogin.expira_em > agora,
+        SessaoLogin.ultimo_uso > agora - timedelta(hours=SESSAO_OCIOSA_H),
+    ).order_by(SessaoLogin.ultimo_uso.desc())
+    if usuario_id is not None:
+        consulta = consulta.where(SessaoLogin.usuario_id == usuario_id)
+    return list(s.scalars(consulta))
+
+
 # ---------- 2FA ----------
+def exige_2fa(u, env: dict | None = None) -> bool:
+    """2FA obrigatório para administradores (SEARCHING_2FA_ADMIN=0 desliga)."""
+    import os
+
+    valor = (os.environ if env is None else env).get("SEARCHING_2FA_ADMIN", "1").strip().lower()
+    return u.papel == "admin" and valor not in ("0", "false", "nao", "não", "off")
+
+
+
 def iniciar_2fa(u: Usuario) -> dict:
     if u.totp_ativo:
         raise ErroAuth("A verificação em duas etapas já está ativa.", 409)

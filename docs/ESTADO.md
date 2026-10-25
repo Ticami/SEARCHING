@@ -3,7 +3,7 @@
 Arquivo de continuidade: qualquer sessão nova deve ler isto primeiro e **atualizá-lo ao terminar cada tarefa** (mover o item
 para "Feito" com o hash do commit, ajustar "Em andamento" e "Próximos passos" e incluir o arquivo no mesmo commit da tarefa).
 
-Última atualização: Multiusuário completo (Fases 0 a 4); push ainda não feito (testes: 287 passando).
+Última atualização: reforço de segurança do hospedado (tópico 2) pronto; push ainda não feito (testes: 305 passando).
 
 ## Resumo do projeto
 
@@ -48,13 +48,18 @@ relatórios. Dados 100% locais.
 
 ## Em andamento
 
-Nada no código. O sistema multiusuário (`docs/DESENHO_MULTIUSUARIO.md`, `docs/IMPLANTACAO.md`) está completo nas Fases 0 a 4; decisão: extensão
-hospedada é viável, **plano B não foi usado**; modo local segue idêntico (sem login).
-**Validado em 2026-10-25:** `scripts/e2e_assistida.py` (local) e `--hospedado` passaram com Chrome real (extensão v2). Ainda não validados: `Dockerfile`/`docker-compose.yml` (não construídos) e PostgreSQL real (só SQLite->SQLite).
+Nada no código. Multiusuário completo (Fases 0 a 4, ver `docs/DESENHO_MULTIUSUARIO.md` e `docs/IMPLANTACAO.md`) e, depois dele, o
+**reforço de segurança** (commit seguinte ao `7b46ce0`): limite de requisições em toda a API (por usuário/IP, em memória por processo),
+tela de sessões ativas com encerramento (própria e do admin), 2FA obrigatório para admin (`SEARCHING_2FA_ADMIN`, padrão ligado),
+lista de ids da extensão (`SEARCHING_EXTENSAO_IDS`) e retenção dos prints (`SEARCHING_RETENCAO_PRINTS_DIAS`, tela Usuários,
+`python -m searching.operacao reter-prints`). Modo local segue idêntico (sem login).
+**Validado em 2026-10-25:** `scripts/e2e_assistida.py` (local) e `--hospedado` passaram com Chrome real (extensão v2). Ainda não
+validados: `Dockerfile`/`docker-compose.yml` (não construídos), PostgreSQL real (só SQLite->SQLite) e a coleta na Magalu real (seletores
+só testados com HTML sintético). O e2e não foi rodado de novo depois do reforço de segurança.
 
 ## Próximos passos (sugestões)
 
-0. **Multiusuário, o que ficou de fora:** alertas por usuário e resumo semanal em Excel, abstração de fontes de dados (API/feed oficial), retenção/arquivamento, exportação/importação do espaço de trabalho (o backup cobre o essencial), prints em armazenamento de objetos, edição dos destinatários pela interface, áreas privadas por pessoa.
+0. **Multiusuário, o que ficou de fora:** alertas por usuário e resumo semanal em Excel, abstração de fontes de dados (API/feed oficial), arquivamento do histórico de preços, exportação/importação do espaço de trabalho (o backup cobre o essencial), prints em armazenamento de objetos, edição dos destinatários pela interface, áreas privadas por pessoa.
 1. **Validar os seletores reais da Magalu** na coleta assistida (PIX, vendedor, menu de pagamento/cartão 1x). Hoje só foram
    testados com HTML sintético e uma loja simulada. Opção: o usuário salva o HTML de um produto (F12, Copy outerHTML) para virar fixture.
 2. **Adaptador do Mercado Livre** com coleta automática (a busca abriu normal no coletor: 43 resultados; falta ver a página do anúncio).

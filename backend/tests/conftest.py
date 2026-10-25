@@ -84,6 +84,7 @@ def hosp(tmp_path, monkeypatch):
     monkeypatch.setenv("SEARCHING_DB", str(tmp_path / "h.db"))
     monkeypatch.setenv("SEARCHING_PRINTS", str(tmp_path / "prints"))
     monkeypatch.setenv("SEARCHING_MODO", "hospedado")
+    monkeypatch.setenv("SEARCHING_2FA_ADMIN", "0")  # os testes de 2FA obrigatório ligam de volta
     monkeypatch.setenv("SEARCHING_URL_PUBLICA", ORIGEM)
     sys.modules.pop("server", None)
     server = importlib.import_module("server")

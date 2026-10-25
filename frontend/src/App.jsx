@@ -12,7 +12,7 @@ import { Conta, Login, Usuarios, useAuth } from "./auth.jsx";
 import "./styles/global.css";
 
 export default function App() {
-  const { carregando, usuario, modo, pode, sair } = useAuth();
+  const { carregando, usuario, modo, pode, sair, precisa2fa } = useAuth();
   const [pendentes, setPendentes] = useState(0);
 
   // Contador de links aguardando revisão, mostrado no menu.
@@ -41,6 +41,8 @@ export default function App() {
 
   if (carregando) return null;
   if (!usuario) return <Login />;
+  // administrador sem 2FA: só a tela Minha conta, onde ele ativa (o servidor também bloqueia o resto)
+  if (precisa2fa) return <div className="layout"><main className="content"><Conta /></main></div>;
 
   return (
     <Router>

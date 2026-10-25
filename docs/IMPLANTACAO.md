@@ -28,6 +28,11 @@ pelo Git, permissão `600`) ou o gerenciador de segredos do seu provedor.
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `ALERTA_DESTINATARIOS` | E-mail. A senha de app nunca é guardada no banco. |
 | `SEARCHING_LOG_FORMATO` / `SEARCHING_LOG_NIVEL` | `json` (padrão no hospedado) ou `texto`; `INFO`, `WARNING`... |
 | `SEARCHING_ORIGENS` | Origens `https://` extras permitidas no CORS (raro). |
+| `SEARCHING_2FA_ADMIN` | `1` (padrão): administradores **precisam** ativar o 2FA para usar o sistema. `0` desliga. |
+| `SEARCHING_EXTENSAO_IDS` | Ids oficiais da extensão, separados por vírgula (o do Chrome e o do Edge são diferentes). Com a lista, o servidor só aceita capturas vindas de `chrome-extension://<id da lista>`, além do token. Vazio = só o token. |
+| `SEARCHING_RETENCAO_PRINTS_DIAS` | Apaga prints com mais de N dias (0 = guardar para sempre). Também configurável na tela Usuários. |
+| `SEARCHING_PRINTS_ARQUIVO` | Se definido, os prints vencidos são movidos para esta pasta em vez de apagados. |
+| `SEARCHING_LIMITE_REQ_MIN`, `SEARCHING_LIMITE_ESCRITA_MIN`, `SEARCHING_LIMITE_EXPORTAR_MIN` | Limites por minuto, por usuário (ou por IP sem login): leitura 600, escrita 120, exportação 10. `0` desliga. Contados por processo do gunicorn. |
 
 ## 3. Opção A: Docker Compose (recomendada)
 
@@ -86,17 +91,32 @@ python -m searching.operacao restaurar /backups/searching-backup-AAAAMMDD-HHMMSS
 A restauração **não apaga** o banco atual: ele vira `searching.db.antes-<data>`. Agende o backup (cron) e guarde cópias fora do
 servidor. **Teste a restauração** antes de precisar dela.
 
-## 8. Logs
+## 8. Retenção dos prints
+
+Prints podem mostrar nome/CEP de quem coletou logado na loja. Defina um prazo (tela Usuários → *Retenção dos prints*, ou
+`SEARCHING_RETENCAO_PRINTS_DIAS`). A política roda a cada início do servidor; para rodar todo dia, agende:
+
+```bash
+python -m searching.operacao reter-prints              # usa o prazo configurado
+python -m searching.operacao reter-prints --dias 90 --simular   # só mostra o que seria removido
+```
+
+O histórico de preços fica; só o arquivo do print sai (ou vai para `SEARCHING_PRINTS_ARQUIVO`).
+
+## 9. Logs
 
 Uma linha JSON por evento, na saída padrão (o Docker/provedor recolhe). Cada requisição registra `request_id` (também devolvido no
 cabeçalho `X-Request-ID`), método, caminho, status, duração, usuário e IP. **Não** entram corpos, cookies, tokens nem query strings.
 A trilha de auditoria (quem fez o quê) fica no banco e aparece na tela Usuários (`/api/auditoria`).
 
-## 9. Lista de verificação de segurança
+## 10. Lista de verificação de segurança
 
 - [ ] Domínio com HTTPS válido; `SEARCHING_URL_PUBLICA` em `https://`.
 - [ ] Banco e volume de prints **não expostos** à internet (só o proxy publica portas).
-- [ ] Primeiro admin criado pelo comando; sem senha padrão. Ative o 2FA do admin em *Minha conta*.
+- [ ] Primeiro admin criado pelo comando; sem senha padrão. O 2FA do admin é obrigatório (ative em *Minha conta* no primeiro acesso; se perder o aparelho: `python -m searching.usuarios desativar-2fa --email ...`).
+- [ ] `SEARCHING_EXTENSAO_IDS` com o(s) id(s) oficial(is) da extensão publicada.
+- [ ] Prazo de retenção dos prints definido.
+- [ ] Sessões ativas revisadas de vez em quando (tela Usuários) e encerradas as suspeitas.
 - [ ] `deploy/hospedado.env` com permissão restrita e fora do Git; senha do banco longa e aleatória.
 - [ ] Backup agendado e restauração testada.
 - [ ] Usuários com o **menor papel** possível (`leitor` por padrão); coletores com produtos atribuídos.

@@ -105,7 +105,13 @@ guarda.instalar(app)
 app.register_blueprint(web_conta.bp)
 
 if HOSPEDADO:
+    from searching import retencao as _retencao
     from searching.db.models import Usuario
+
+    with db_fabrica() as _s:  # aplica a política de retenção dos prints a cada início (e por cron: searching.operacao reter-prints)
+        _r = _retencao.aplicar(_s)
+        if _r["removidos"] or _r["arquivados"]:
+            logging.getLogger("searching").info("retenção de prints aplicada", extra=_r)
 
     with db_fabrica() as _s:
         if not _s.scalar(select(Usuario.id).limit(1)):

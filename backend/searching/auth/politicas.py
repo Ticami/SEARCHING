@@ -44,6 +44,9 @@ POLITICAS: dict[str, Politica] = {
     "conta.meus_tokens": _p(LOGADO),
     "conta.criar_meu_token": _p(LOGADO),
     "conta.revogar_meu_token": _p(LOGADO),
+    "conta.minhas_sessoes": _p(LOGADO),
+    "conta.encerrar_minha_sessao": _p(LOGADO),
+    "conta.encerrar_outras_sessoes": _p(LOGADO),
     # ----- leitor: só ver -----
     "listar_links": _p(LEITOR),
     "historico_de_links": _p(LEITOR),
@@ -84,6 +87,11 @@ POLITICAS: dict[str, Politica] = {
     "conta.tokens_do_usuario": _p(ADMIN),
     "conta.revogar_token": _p(ADMIN),
     "conta.auditoria": _p(ADMIN),
+    "conta.listar_sessoes": _p(ADMIN),
+    "conta.encerrar_sessao": _p(ADMIN),
+    "conta.retencao": _p(ADMIN),
+    "conta.salvar_retencao": _p(ADMIN),
+    "conta.aplicar_retencao": _p(ADMIN),
     "conta.listar_atribuicoes": _p(ADMIN),
     "conta.salvar_atribuicoes": _p(ADMIN),
 }

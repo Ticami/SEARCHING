@@ -69,6 +69,10 @@ CSRF: escritas por sessão exigem `X-CSRF-Token` + `Origin` igual à URL públic
 mais de 20 falhas por IP em 15 min recebem 429; resposta idêntica para e-mail inexistente. Senhas: mínimo 12 caracteres. 2FA TOTP opcional
 (RFC 6238, implementação própria sem dependência). Recuperação: link de uso único (30 min) enviado ao e-mail do usuário pelo SMTP do `.env`.
 
+Reforços adicionados depois (ver `docs/IMPLANTACAO.md`): limite de requisições por minuto em toda a API, tela de sessões ativas com
+encerramento (própria e, para o admin, de qualquer pessoa), 2FA obrigatório para administradores, lista de ids permitidos da
+extensão e retenção configurável dos prints.
+
 ## 6. Fluxo de pareamento da extensão
 
 1. Instalar a extensão e abrir a **página de opções**: informar a URL do servidor (HTTPS) → a extensão pede a permissão do domínio.

@@ -23,7 +23,7 @@ const AuthContext = createContext({ usuario: null, modo: "local", pode: () => tr
 export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }) {
-  const [estado, setEstado] = useState({ carregando: true, usuario: null, modo: "local", atribuidos: null, erro: "" });
+  const [estado, setEstado] = useState({ carregando: true, usuario: null, modo: "local", atribuidos: null, precisa2fa: false, erro: "" });
 
   const carregar = useCallback(async () => {
     try {
@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
       }
       const j = await res.json();
       csrfAtual = j.csrf || null;
-      setEstado({ carregando: false, usuario: j.usuario, modo: j.modo, atribuidos: j.atribuidos, erro: "" });
+      setEstado({ carregando: false, usuario: j.usuario, modo: j.modo, atribuidos: j.atribuidos, precisa2fa: !!j.precisa_2fa, erro: "" });
     } catch {
       setEstado((e) => ({ ...e, carregando: false, erro: "Não consegui falar com o servidor." }));
     }
@@ -142,7 +142,8 @@ export function Login() {
 }
 
 export function Conta() {
-  const { usuario, modo, recarregar } = useAuth();
+  const { usuario, modo, recarregar, precisa2fa } = useAuth();
+  const [sessoes, setSessoes] = useState([]);
   const [senha, setSenha] = useState({ atual: "", nova: "" });
   const [msg, setMsg] = useState("");
   const [tokens, setTokens] = useState([]);
@@ -154,7 +155,13 @@ export function Conta() {
     const r = await chamar("/api/meus-tokens", "GET");
     if (r.ok) setTokens(r.json);
   }, []);
-  useEffect(() => { if (modo === "hospedado") carregarTokens(); }, [modo, carregarTokens]);
+  const carregarSessoes = useCallback(async () => {
+    const r = await chamar("/api/minhas-sessoes", "GET");
+    if (r.ok) setSessoes(r.json);
+  }, []);
+  useEffect(() => { if (modo === "hospedado") { carregarTokens(); carregarSessoes(); } }, [modo, carregarTokens, carregarSessoes]);
+  const encerrarSessao = async (id) => { await chamar(`/api/minhas-sessoes/${id}`, "DELETE"); carregarSessoes(); };
+  const encerrarOutras = async () => { await chamar("/api/minhas-sessoes/encerrar-outras", "POST", {}); carregarSessoes(); };
 
   if (modo !== "hospedado") return <div className="page"><div className="card wide"><p>No modo local não há contas: tudo roda neste computador.</p></div></div>;
 
@@ -178,6 +185,11 @@ export function Conta() {
 
   return (
     <div className="page">
+      {precisa2fa && (
+        <div className="card wide" role="alert">
+          <p className="status">Administradores precisam ativar a verificação em duas etapas antes de usar o sistema. Faça isso abaixo.</p>
+        </div>
+      )}
       <div className="card wide stack">
         <h3>{usuario.nome || usuario.email} <span className="chip">{usuario.papel}</span></h3>
         <form className="stack" onSubmit={trocar}>
@@ -199,6 +211,19 @@ export function Conta() {
             <button className="btn primary" onClick={ativar2fa}>Ativar</button>
           </div>
         ) : <button className="btn secondary" onClick={iniciar2fa}>Ativar verificação em duas etapas</button>}
+      </div>
+
+      <div className="card wide stack">
+        <h3>Sessões ativas</h3>
+        {sessoes.map((x) => (
+          <div className="row" key={x.id}>
+            <span className="note">
+              {x.atual ? "Esta sessão · " : ""}entrou em {x.criada_em} · último uso {x.ultimo_uso} · IP {x.ip || "—"} · {x.navegador || "navegador desconhecido"}
+            </span>
+            <button className="btn ghost" onClick={() => encerrarSessao(x.id)}>{x.atual ? "Sair desta" : "Encerrar"}</button>
+          </div>
+        ))}
+        {sessoes.length > 1 && <button className="btn secondary" onClick={encerrarOutras}>Encerrar todas as outras</button>}
       </div>
 
       <div className="card wide stack">
@@ -228,11 +253,17 @@ export function Usuarios() {
   const [atrib, setAtrib] = useState({});
   const [tokens, setTokens] = useState({});
   const [auditoria, setAuditoria] = useState([]);
+  const [sessoes, setSessoes] = useState([]);
+  const [retencao, setRetencao] = useState(0);
+  const [msgRetencao, setMsgRetencao] = useState("");
 
   const carregar = useCallback(async () => {
-    const [u, p, a, au] = await Promise.all([
+    const [u, p, a, au, se, re] = await Promise.all([
       chamar("/api/usuarios", "GET"), chamar("/api/links", "GET"), chamar("/api/atribuicoes", "GET"), chamar("/api/auditoria?limite=50", "GET"),
+      chamar("/api/sessoes", "GET"), chamar("/api/retencao", "GET"),
     ]);
+    if (se.ok) setSessoes(se.json);
+    if (re.ok) setRetencao(re.json.dias);
     if (u.ok) setLista(u.json);
     if (p.ok) setProdutos(p.json);
     if (a.ok) setAtrib(a.json);
@@ -250,6 +281,15 @@ export function Usuarios() {
   const redefinir = async (id) => { const r = await chamar(`/api/usuarios/${id}/redefinir-senha`, "POST", {}); setMsg(r.ok ? `Senha provisória: ${r.json.senha_temporaria}` : r.json.error); };
   const verTokens = async (id) => { const r = await chamar(`/api/usuarios/${id}/tokens`, "GET"); if (r.ok) setTokens({ ...tokens, [id]: r.json }); };
   const revogar = async (uid, tid) => { await chamar(`/api/tokens/${tid}`, "DELETE"); verTokens(uid); };
+  const encerrarSessaoDe = async (id) => { await chamar(`/api/sessoes/${id}`, "DELETE"); carregar(); };
+  const salvarRetencao = async () => {
+    const r = await chamar("/api/retencao", "PUT", { dias: Number(retencao) });
+    setMsgRetencao(r.ok ? "Salvo." : r.json.error);
+  };
+  const aplicarRetencao = async (simular) => {
+    const r = await chamar("/api/retencao/aplicar", "POST", { simular });
+    setMsgRetencao(r.ok ? `${simular ? "Simulação: " : ""}${r.json.removidos} removido(s), ${r.json.arquivados} arquivado(s).` : r.json.error);
+  };
   const alternarProduto = async (uid, pid) => {
     const atuais = new Set(atrib[uid] || []);
     atuais.has(pid) ? atuais.delete(pid) : atuais.add(pid);
@@ -302,6 +342,29 @@ export function Usuarios() {
           )}
         </div>
       ))}
+
+      <div className="card wide stack">
+        <h3>Retenção dos prints</h3>
+        <p className="note">Prints podem mostrar nome e CEP de quem coletou. Apague os antigos depois de N dias (0 = guardar para sempre). O histórico de preços continua.</p>
+        <div className="row">
+          <label className="row"><span className="note">Dias</span>
+            <input className="input" type="number" min="0" max="3650" style={{ width: 100 }} value={retencao} onChange={(e) => setRetencao(e.target.value)} /></label>
+          <button className="btn secondary" onClick={salvarRetencao}>Salvar</button>
+          <button className="btn ghost" onClick={() => aplicarRetencao(true)}>Simular</button>
+          <button className="btn ghost" onClick={() => window.confirm("Apagar agora os prints mais antigos que o prazo?") && aplicarRetencao(false)}>Aplicar agora</button>
+        </div>
+        {msgRetencao && <p className="status">{msgRetencao}</p>}
+      </div>
+
+      <div className="card wide stack">
+        <h3>Sessões ativas de todos</h3>
+        {sessoes.map((x) => (
+          <div className="row" key={x.id}>
+            <span className="note">{x.usuario} · último uso {x.ultimo_uso} · IP {x.ip || "—"}{x.atual ? " · (a sua)" : ""}</span>
+            {!x.atual && <button className="btn ghost" onClick={() => encerrarSessaoDe(x.id)}>Encerrar</button>}
+          </div>
+        ))}
+      </div>
 
       <div className="card wide stack">
         <h3>Auditoria (últimos 50 eventos)</h3>
