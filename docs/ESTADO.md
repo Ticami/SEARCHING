@@ -50,9 +50,7 @@ relatórios. Dados 100% locais.
 
 Nada no código. O sistema multiusuário (`docs/DESENHO_MULTIUSUARIO.md`, `docs/IMPLANTACAO.md`) está completo nas Fases 0 a 4; decisão: extensão
 hospedada é viável, **plano B não foi usado**; modo local segue idêntico (sem login).
-**Pendente de validação humana:** `python scripts/e2e_assistida.py` e `... --hospedado` não foram rodados após a extensão v2 (abrem
-janelas e baixam o Chrome for Testing, ~460 MB); `Dockerfile`/`docker-compose.yml` não foram construídos; PostgreSQL só foi exercitado
-pela via SQLite -> SQLite (não há servidor PostgreSQL nesta máquina).
+**Validado em 2026-10-25:** `scripts/e2e_assistida.py` (local) e `--hospedado` passaram com Chrome real (extensão v2). Ainda não validados: `Dockerfile`/`docker-compose.yml` (não construídos) e PostgreSQL real (só SQLite->SQLite).
 
 ## Próximos passos (sugestões)
 

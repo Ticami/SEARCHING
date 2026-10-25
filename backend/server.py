@@ -534,7 +534,7 @@ def coletar_manual():
 
 
 if __name__ == "__main__":
-    if HOSPEDADO:
+    if HOSPEDADO and not os.environ.get("SEARCHING_PERMITIR_DEV"):  # SEARCHING_PERMITIR_DEV=1 só para o teste e2e local
         sys.exit("O modo hospedado não usa o servidor de desenvolvimento do Flask. Use: gunicorn -b 0.0.0.0:8000 server:app (veja docs/IMPLANTACAO.md).")
     print("===========================================")
     print("   🚀 Servidor Flask iniciado com sucesso! ")

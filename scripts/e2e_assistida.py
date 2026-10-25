@@ -210,7 +210,7 @@ def main():
 
     env = {**os.environ, "SEARCHING_PORT": str(PORTA_API), "SEARCHING_API": f"http://127.0.0.1:{PORTA_API}",
            "SEARCHING_ORIGENS": f"http://localhost:{PORTA_APP},http://127.0.0.1:{PORTA_APP}", "SEARCHING_DB": str(tmp / "e2e.db"), "SEARCHING_PRINTS": str(tmp / "prints"), "SEARCHING_TOKEN": str(tmp / "token"),
-           **({"SEARCHING_MODO": "hospedado", "SEARCHING_URL_PUBLICA": f"http://localhost:{PORTA_API}"} if HOSPEDADO else {}),
+           **({"SEARCHING_PERMITIR_DEV": "1", "SEARCHING_MODO": "hospedado", "SEARCHING_URL_PUBLICA": f"http://localhost:{PORTA_API}"} if HOSPEDADO else {}),
            # e-mail inexistente: o teste nunca envia mensagem de verdade
            "SMTP_HOST": "smtp.invalid", "SMTP_USER": "teste@example.com", "SMTP_PASSWORD": "x", "ALERTA_DESTINATARIOS": "teste@example.com"}
     servidor = subprocess.Popen([sys.executable, "server.py"], cwd=BACKEND, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
