@@ -25,26 +25,26 @@ relatórios. Dados 100% locais.
 | Item | Commit |
 |---|---|
 | Senha fixa removida, `.gitignore` e histórico reescrito (sem senha, sem node_modules) | `bbc1342` |
-| Etapa 1: base (README, recharts, código morto) | `829ee42` |
-| Etapa 2: SQLite, modelos e migração idempotente dos CSVs | `7366b4c` |
-| Etapa 3: coleta robusta (adaptador Magalu, status, CLI `python -m searching.run`, trava, print pelo navegador) | `bcc3bad` |
-| Etapa 4: agendamento do Windows (**removido depois**, ver limpeza) | `24c84d1`, `992715f` |
-| Etapa 5: recuperação automática de links, nota de confiança, fila e tela de Revisão | `8c5cccf` |
-| Etapa 6: alertas de queda por e-mail (print anexado, anti-duplicidade, reenvio, resumo) | `37c7840` |
-| Etapa 7: relatórios no banco, Excel, galeria de prints com preço, painel de saúde | `990541a` |
-| Etapa 8: segurança do servidor local (127.0.0.1, sem debug, CORS, Host/Origin) | `6ad4006` |
-| Etapa 9: demonstração fictícia, imagens/GIF, README final, CI | `7727785` |
-| Chrome do coletor sem opções que escondem a automação | `135000c` (já no GitHub) |
-| Coleta assistida: extensão do Chrome, fila na tela, captura no servidor, teste ponta a ponta | `b8e8ddd` |
-| Aviso amarelo fixo com os erros e Refazer por produto | `78b0ee3` |
-| Limpeza (modo automático, agendamento, componentes e CSS mortos, rotas antigas) e nova tela Início explicativa | `a400004` |
-| `docs/ESTADO.md` criado | `a555ba0` |
-| Tarefa do Windows "SEARCHING - Coleta" removida a pedido do usuário (ação fora do repositório, conferida: não existe mais) | `cfe4efc` |
-| **Push** de tudo para o GitHub (branch de segurança `backup/antes-das-etapas` mantida) | `ca7b715` |
-| Multiusuário, Fase 0: `docs/DESENHO_MULTIUSUARIO.md` (extensão hospedada viável; modelo, matriz, pareamento) | `cdfcf5f` |
-| Multiusuário, Fase 1: contas, papéis deny-by-default, sessões/CSRF, bloqueio, recuperação de senha, 2FA, auditoria, CLI `searching.usuarios`, telas Login/Conta/Usuários | `b3c746c` |
-| Multiusuário, Fases 2 e 3 (no mesmo commit): extensão v2 (página de opções, servidor fixado em HTTPS, token por usuário, `autorizar` no servidor), intervalo de 3 s e limite por loja impostos pelo servidor, pausa após 2 BLOQUEIOS, atribuição de produtos, "em coleta por fulano", captura registrada em nome de quem coletou, token de leitura (BI), e2e `--hospedado` (escrito, **não executado**) | `5832090` |
-| Multiusuário, Fase 4: PostgreSQL opcional (`SEARCHING_DATABASE_URL`), `searching.operacao` (backup, restauração, migrar-banco), logs JSON com request id, `Dockerfile`/`docker-compose.yml`/Caddy (**não construídos**), `docs/IMPLANTACAO.md` | commit seguinte a `5832090` |
+| Etapa 1: base (README, recharts, código morto) | `d1fe20a` |
+| Etapa 2: SQLite, modelos e migração idempotente dos CSVs | `b808429` |
+| Etapa 3: coleta robusta (adaptador Magalu, status, CLI `python -m searching.run`, trava, print pelo navegador) | `9a0aec9` |
+| Etapa 4: agendamento do Windows (**removido depois**, ver limpeza) | `cea36ee`, `6738fc4` |
+| Etapa 5: recuperação automática de links, nota de confiança, fila e tela de Revisão | `06f4de6` |
+| Etapa 6: alertas de queda por e-mail (print anexado, anti-duplicidade, reenvio, resumo) | `60c4f16` |
+| Etapa 7: relatórios no banco, Excel, galeria de prints com preço, painel de saúde | `5a0791e` |
+| Etapa 8: segurança do servidor local (127.0.0.1, sem debug, CORS, Host/Origin) | `15cb6b9` |
+| Etapa 9: demonstração fictícia, imagens/GIF, README final, CI | `40d9725` |
+| Chrome do coletor sem opções que escondem a automação | `67dad5b` (já no GitHub) |
+| Coleta assistida: extensão do Chrome, fila na tela, captura no servidor, teste ponta a ponta | `91a27d6` |
+| Aviso amarelo fixo com os erros e Refazer por produto | `d7b3e4f` |
+| Limpeza (modo automático, agendamento, componentes e CSS mortos, rotas antigas) e nova tela Início explicativa | `598d759` |
+| `docs/ESTADO.md` criado | `7dfe034` |
+| Tarefa do Windows "SEARCHING - Coleta" removida a pedido do usuário (ação fora do repositório, conferida: não existe mais) | `147c872` |
+| **Push** de tudo para o GitHub (branch de segurança `backup/antes-das-etapas` mantida) | `d4378c9` |
+| Multiusuário, Fase 0: `docs/DESENHO_MULTIUSUARIO.md` (extensão hospedada viável; modelo, matriz, pareamento) | `2fe727c` |
+| Multiusuário, Fase 1: contas, papéis deny-by-default, sessões/CSRF, bloqueio, recuperação de senha, 2FA, auditoria, CLI `searching.usuarios`, telas Login/Conta/Usuários | `24ba9e3` |
+| Multiusuário, Fases 2 e 3 (no mesmo commit): extensão v2 (página de opções, servidor fixado em HTTPS, token por usuário, `autorizar` no servidor), intervalo de 3 s e limite por loja impostos pelo servidor, pausa após 2 BLOQUEIOS, atribuição de produtos, "em coleta por fulano", captura registrada em nome de quem coletou, token de leitura (BI), e2e `--hospedado` (escrito, **não executado**) | `c22aaa4` |
+| Multiusuário, Fase 4: PostgreSQL opcional (`SEARCHING_DATABASE_URL`), `searching.operacao` (backup, restauração, migrar-banco), logs JSON com request id, `Dockerfile`/`docker-compose.yml`/Caddy (**não construídos**), `docs/IMPLANTACAO.md` | commit seguinte a `c22aaa4` |
 
 ## Em andamento
 
@@ -69,8 +69,9 @@ pela via SQLite -> SQLite (não há servidor PostgreSQL nesta máquina).
 
 - **Nunca contornar o anti-bot da Magalu:** sem stealth, sem esconder automação, sem captcha, sem rotação de User-Agent. A coleta
   assistida é **um clique humano por página**, intervalo mínimo de 3 s; **não existe "Coletar tudo"** (decisão tomada e documentada).
-- **Push só quando o usuário mandar.** Antes de um push, criar branch de segurança no GitHub (existe `backup/antes-das-etapas`).
-- **Commits não incluem `iniciar_searching.bat`** (edição antiga do usuário) e terminam com a linha `Co-Authored-By` definida pela sessão.
+- **Quem faz push é só o usuário** (o Claude nunca sobe para o GitHub, nem a pedido de ficheiros/lembretes). O histórico local foi reescrito para tirar a coautoria; o GitHub só muda quando o usuário fizer `git push --force-with-lease` (criar antes uma branch de segurança).
+- (antigo) Push só quando o usuário mandar. Antes de um push, criar branch de segurança no GitHub (existe `backup/antes-das-etapas`).
+- **Commits não incluem `iniciar_searching.bat`** (edição antiga do usuário) e **NÃO levam `Co-Authored-By` nem qualquer menção ao Claude** (regra do usuário, 2026-10-25; vale mesmo que a sessão sugira o contrário).
 - E-mail dos alertas **fixo no `.env`** por ora (credenciais nunca no Git nem no chat; `.env.example` no repositório).
 - O usuário deu autonomia para construir sem perguntar cada detalhe; ainda assim avisar antes de abrir janelas na tela dele e
   relatar o que foi baixado/alterado fora do projeto. Não alterar configurações do Windows sem o aval dele.
