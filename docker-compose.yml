@@ -18,7 +18,8 @@ services:
     volumes:
       - prints:/dados/prints
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     expose:
       - "8000"
   db:
@@ -30,6 +31,11 @@ services:
       POSTGRES_DB: searching
     volumes:
       - pgdados:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U searching -d searching"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
   proxy:
     image: caddy:2
     restart: unless-stopped

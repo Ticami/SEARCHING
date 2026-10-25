@@ -1,5 +1,4 @@
 """Segurança extra do modo hospedado: limite de requisições, sessões ativas, 2FA de admin, ids da extensão e retenção de prints."""
-import os
 from datetime import datetime, timedelta
 
 from conftest import EXTENSAO, SENHA, URL_S25
@@ -7,7 +6,7 @@ from sqlalchemy import select
 
 from searching import retencao, seguranca
 from searching.auth import limite, totp
-from searching.db.models import Coleta, Produto, Usuario
+from searching.db.models import Coleta, Produto
 from test_hospedado_extensao import _corpo, _parear, _preparar
 
 
@@ -247,4 +246,3 @@ def test_cli_reter_prints(hosp, tmp_path, monkeypatch):
     saidas = []
     assert operacao.main(["reter-prints", "--dias", "30", "--simular"], saida=saidas.append) == 0
     assert "simulação" in saidas[0]
-    assert os.path.exists(tmp_path / "h.db") and Usuario  # banco do teste intacto

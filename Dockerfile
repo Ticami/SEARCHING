@@ -13,7 +13,7 @@ COPY backend/requirements.txt backend/requirements-hospedado.txt ./
 RUN pip install --no-cache-dir -r requirements-hospedado.txt
 COPY backend/ ./
 COPY --from=frontend /app/frontend/dist /app/frontend/dist
-RUN useradd --system --uid 10001 searching && mkdir -p /dados/prints && chown -R searching /dados
+RUN useradd --system --create-home --uid 10001 searching && mkdir -p /dados/prints && chown -R searching /dados
 USER searching
 VOLUME ["/dados"]
 EXPOSE 8000

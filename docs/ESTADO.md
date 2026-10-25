@@ -3,7 +3,7 @@
 Arquivo de continuidade: qualquer sessão nova deve ler isto primeiro e **atualizá-lo ao terminar cada tarefa** (mover o item
 para "Feito" com o hash do commit, ajustar "Em andamento" e "Próximos passos" e incluir o arquivo no mesmo commit da tarefa).
 
-Última atualização: reforço de segurança do hospedado (tópico 2) pronto; push ainda não feito (testes: 305 passando).
+Última atualização: Docker/PostgreSQL/HTTPS da extensão validados; falta a Magalu real; push ainda não feito (testes: 305 passando).
 
 ## Resumo do projeto
 
@@ -53,9 +53,12 @@ Nada no código. Multiusuário completo (Fases 0 a 4, ver `docs/DESENHO_MULTIUSU
 tela de sessões ativas com encerramento (própria e do admin), 2FA obrigatório para admin (`SEARCHING_2FA_ADMIN`, padrão ligado),
 lista de ids da extensão (`SEARCHING_EXTENSAO_IDS`) e retenção dos prints (`SEARCHING_RETENCAO_PRINTS_DIAS`, tela Usuários,
 `python -m searching.operacao reter-prints`). Modo local segue idêntico (sem login).
-**Validado em 2026-10-25:** `scripts/e2e_assistida.py` (local) e `--hospedado` passaram com Chrome real (extensão v2). Ainda não
-validados: `Dockerfile`/`docker-compose.yml` (não construídos), PostgreSQL real (só SQLite->SQLite) e a coleta na Magalu real (seletores
-só testados com HTML sintético). O e2e não foi rodado de novo depois do reforço de segurança.
+**Validado em 2026-10-25:** `scripts/e2e_assistida.py` (local e `--hospedado`) com Chrome real, também depois do reforço de segurança;
+Docker (imagem construída; compose com PostgreSQL 16 + Caddy HTTPS no ar; login por HTTPS); suíte hospedada (81 testes) e `migrar-banco`
+(SQLite -> PostgreSQL, sequências OK) contra PostgreSQL real; `scripts/e2e_opcoes_extensao.py` (página de opções, registro dinâmico do
+ponte.js, servidor fixado, Desparear) contra o stack HTTPS. Correções feitas nesse caminho: `.dockerignore` (sem ele o `node_modules` do
+Windows quebrava a build e `.env`/dados iriam para a imagem), usuário do contêiner com home (gunicorn), espera do banco no compose.
+**Ainda não validado:** coleta na Magalu **real** (seletores só testados com HTML sintético; aguardando o HTML salvo pelo usuário).
 
 ## Próximos passos (sugestões)
 

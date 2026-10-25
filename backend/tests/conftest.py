@@ -1,5 +1,6 @@
 """Fixtures do modo hospedado: servidor recarregado com login, três usuários (admin, coletor, leitor) e um cliente HTTP."""
 import importlib
+import os
 import sys
 from pathlib import Path
 
@@ -86,6 +87,15 @@ def hosp(tmp_path, monkeypatch):
     monkeypatch.setenv("SEARCHING_MODO", "hospedado")
     monkeypatch.setenv("SEARCHING_2FA_ADMIN", "0")  # os testes de 2FA obrigatório ligam de volta
     monkeypatch.setenv("SEARCHING_URL_PUBLICA", ORIGEM)
+    if os.environ.get("SEARCHING_TESTE_PG"):  # roda a suíte hospedada num PostgreSQL de verdade (banco zerado a cada teste)
+        from sqlalchemy import create_engine
+
+        from searching.db.models import Base
+
+        monkeypatch.setenv("SEARCHING_DATABASE_URL", os.environ["SEARCHING_TESTE_PG"])
+        motor = create_engine(os.environ["SEARCHING_TESTE_PG"].replace("postgresql://", "postgresql+psycopg://"))
+        Base.metadata.drop_all(motor)
+        motor.dispose()
     sys.modules.pop("server", None)
     server = importlib.import_module("server")
     h = Hospedado(server, tmp_path)

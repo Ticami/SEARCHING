@@ -50,8 +50,7 @@ Primeiro administrador (a senha é pedida no terminal, nunca por argumento):
 docker compose exec app python -m searching.usuarios criar-admin --email voce@suaempresa.com --nome "Seu Nome"
 ```
 
-> Os arquivos Docker foram escritos e revisados, mas **ainda não foram construídos nem executados** em nenhuma máquina; teste num
-> ambiente de homologação antes de usar de verdade.
+> Validado em 2026-10-25 numa máquina Windows com Docker Desktop: a imagem constrói, o stack sobe com PostgreSQL 16 e Caddy (HTTPS com certificado interno para `localhost`), o admin é criado pelo comando acima e o login funciona. Para repetir os testes com PostgreSQL real: `SEARCHING_TESTE_PG=postgresql://usuario:senha@host:porta/banco pytest` (zera as tabelas do banco indicado a cada teste: use um banco só de teste).
 
 ## 4. Opção B: sem Docker
 

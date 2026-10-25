@@ -1,0 +1,22 @@
+# Nada disto entra na imagem (segredos, dados e dependências da sua máquina)
+.git
+.env
+.env.*
+deploy/hospedado.env
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/venv
+**/.venv
+backend/data
+backend/prints
+backend/logs
+backend/backups
+backend/links.csv
+**/*.db
+frontend/dist
+dist
+docs
+extensao
+scripts
+*.bat
