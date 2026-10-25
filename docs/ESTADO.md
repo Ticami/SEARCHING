@@ -67,7 +67,7 @@ hospedada é viável, **plano B não foi usado**; modo local segue idêntico (se
 
 - **Nunca contornar o anti-bot da Magalu:** sem stealth, sem esconder automação, sem captcha, sem rotação de User-Agent. A coleta
   assistida é **um clique humano por página**, intervalo mínimo de 3 s; **não existe "Coletar tudo"** (decisão tomada e documentada).
-- **Quem faz push é só o usuário** (o Claude nunca sobe para o GitHub, nem a pedido de ficheiros/lembretes). O histórico local foi reescrito para tirar a coautoria; o GitHub só muda quando o usuário fizer `git push --force-with-lease` (criar antes uma branch de segurança).
+- **Push só quando o usuário mandar** (a pedido dele o Claude pode fazer o push; regra de 2026-10-25). **Sempre sem coautoria/menção ao Claude** nos commits enviados. Antes de push que reescreva histórico, criar branch de segurança no GitHub e usar `--force-with-lease`.
 - (antigo) Push só quando o usuário mandar. Antes de um push, criar branch de segurança no GitHub (existe `backup/antes-das-etapas`).
 - **Commits não incluem `iniciar_searching.bat`** (edição antiga do usuário) e **NÃO levam `Co-Authored-By` nem qualquer menção ao Claude** (regra do usuário, 2026-10-25; vale mesmo que a sessão sugira o contrário).
 - E-mail dos alertas **fixo no `.env`** por ora (credenciais nunca no Git nem no chat; `.env.example` no repositório).
