@@ -96,6 +96,10 @@ def instalar(app) -> None:
             return _erro("Indisponível no modo hospedado: a coleta acontece pela extensão, no computador de cada pessoa.", 404)
         if politica.acesso == pol.EXTENSAO and not seguranca.extensao_autorizada(request.headers.get("Origin")):
             return _erro("Esta extensão não está autorizada neste servidor (SEARCHING_EXTENSAO_IDS).", 403)
+        if politica.acesso == pol.EXTENSAO:
+            versao_ok, minima = seguranca.versao_da_extensao_ok(request.headers.get("X-Searching-Ext-Versao"))
+            if not versao_ok:
+                return _erro(f"A extensão está desatualizada: instale a versão {minima} ou mais nova (atualize pela loja de extensões).", 426)
         if not hospedado:
             g.usuario = USUARIO_LOCAL
             if request.endpoint.startswith("conta.") and request.endpoint not in ("conta.modo", "conta.eu"):
@@ -168,7 +172,10 @@ def instalar(app) -> None:
             resposta.headers.setdefault("Referrer-Policy", "same-origin")
             resposta.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
             resposta.headers.setdefault(
-                "Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+                "Content-Security-Policy",
+                # as fontes do design vêm do Google Fonts (css em googleapis, arquivos em gstatic)
+                "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'",
             )
             if request.path.startswith("/api/"):
                 resposta.headers["Cache-Control"] = "no-store"

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SEARCHING - Coleta assistida",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Lê a página do produto que você abre pelo SEARCHING e envia preço e print ao seu servidor SEARCHING (local ou hospedado). Uma página por clique seu.",
   "permissions": [
     "tabs",

@@ -52,17 +52,18 @@ export default function LinkHistory() {
       </section>
 
       <div className="card wide stack">
-        <div style={{ overflowX: "auto" }}>
+        <div style={{ overflowX: "auto" }} role="region" aria-label="Trocas de link" tabIndex={0}>
           <table className="table">
+            <caption className="muted" style={{ textAlign: "left" }}>Trocas de link, da mais recente para a mais antiga</caption>
             <thead>
               <tr>
-                <th>Quando</th>
-                <th>Produto</th>
-                <th>Origem</th>
-                <th>Link antigo</th>
-                <th>Link novo</th>
-                <th>Confiança</th>
-                <th></th>
+                <th scope="col">Quando</th>
+                <th scope="col">Produto</th>
+                <th scope="col">Origem</th>
+                <th scope="col">Link antigo</th>
+                <th scope="col">Link novo</th>
+                <th scope="col">Confiança</th>
+                <th scope="col"><span className="sr-only">Ações</span></th>
               </tr>
             </thead>
             <tbody>
@@ -78,6 +79,7 @@ export default function LinkHistory() {
                     <button
                       className="btn secondary"
                       onClick={() => reverter(h)}
+                      aria-label={`Reverter a troca de link de ${h.produto} feita em ${fmtData(h.em)}`}
                       disabled={!h.revertivel || !pode("admin")}
                       title={h.revertivel ? "Voltar ao link antigo" : "O produto já usa outro link: só a troca mais recente pode ser revertida"}
                     >

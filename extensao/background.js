@@ -51,7 +51,7 @@ const ehLocal = (url) => HOSTS_LOCAIS.includes(new URL(url).hostname);
 async function autorizarNoServidor(cfg, cmd) {
   const resp = await fetch(`${cfg.servidor}/api/assistida/autorizar`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Searching-Token": cfg.token },
+    headers: { "Content-Type": "application/json", "X-Searching-Token": cfg.token, "X-Searching-Ext-Versao": VERSAO },
     body: JSON.stringify({ execucao_id: cmd.execucaoId, produto_id: cmd.produtoId }),
   });
   const corpo = await resp.json().catch(() => ({}));
@@ -225,7 +225,7 @@ async function capturar(cmd, appTabId) {
   etapa("enviando");
   const resp = await fetch(`${cfg.servidor}/api/assistida/captura`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Searching-Token": cfg.token },
+    headers: { "Content-Type": "application/json", "X-Searching-Token": cfg.token, "X-Searching-Ext-Versao": VERSAO },
     body: JSON.stringify({
       execucao_id: cmd.execucaoId,
       produto_id: cmd.produtoId,

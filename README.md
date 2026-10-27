@@ -185,6 +185,10 @@ Integração com planilhas/BI: cada usuário pode criar um **token somente leitu
 
 ### Testes
 
+Interface: `cd frontend && npm test` (Vitest + Testing Library, com a API simulada).
+
+Backend:
+
 ```bash
 cd backend
 pip install -r requirements-dev.txt

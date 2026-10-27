@@ -246,3 +246,39 @@ def test_cli_reter_prints(hosp, tmp_path, monkeypatch):
     saidas = []
     assert operacao.main(["reter-prints", "--dias", "30", "--simular"], saida=saidas.append) == 0
     assert "simulação" in saidas[0]
+
+
+def test_csp_do_hospedado_deixa_carregar_as_fontes_do_design(hosp):
+    """Sem isto o navegador bloqueia o Google Fonts do global.css e o site perde a tipografia."""
+    csp = hosp.cliente().get("/api/health").headers["Content-Security-Policy"]
+    assert "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com" in csp
+    assert "font-src 'self' https://fonts.gstatic.com" in csp
+    assert "frame-ancestors 'none'" in csp and "script-src" not in csp  # scripts continuam só 'self' (herdam do default-src)
+
+
+def test_versao_minima_da_extensao(hosp, monkeypatch):
+    from searching.seguranca import versao_da_extensao_ok
+
+    assert versao_da_extensao_ok("1.0.0", {}) == (True, "")  # sem exigência, qualquer versão
+    env = {"SEARCHING_EXTENSAO_VERSAO_MINIMA": "2.1.0"}
+    assert versao_da_extensao_ok("2.1.0", env)[0] and versao_da_extensao_ok("2.10.0", env)[0] and versao_da_extensao_ok("3.0", env)[0]
+    assert not versao_da_extensao_ok("2.0.9", env)[0] and not versao_da_extensao_ok(None, env)[0] and not versao_da_extensao_ok("lixo", env)[0]
+
+    pid, _, cl = _preparar(hosp)
+    c = cl["coletor@teste.com"]
+    token = _parear(c)
+    sess = c.post("/api/assistida/iniciar", {}).get_json()
+    corpo = {"execucao_id": sess["execucao_id"], "produto_id": pid}
+
+    def chamar(versao):
+        h = {"X-Searching-Token": token, "Origin": EXTENSAO}
+        if versao:
+            h["X-Searching-Ext-Versao"] = versao
+        return hosp.server.app.test_client().post("/api/assistida/autorizar", json=corpo, headers=h, base_url="https://searching.teste")
+
+    assert chamar(None).status_code == 200  # sem exigência configurada
+    monkeypatch.setenv("SEARCHING_EXTENSAO_VERSAO_MINIMA", "2.1.0")
+    antiga = chamar("2.0.0")
+    assert antiga.status_code == 426 and "2.1.0" in antiga.get_json()["error"]
+    assert chamar(None).status_code == 426
+    assert chamar("2.1.0").status_code in (200, 429)  # passou da checagem (429 = intervalo de 3 s)

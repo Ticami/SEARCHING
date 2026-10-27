@@ -113,7 +113,7 @@ export default function Alerts() {
             </button>
           </div>
         </div>
-        {msg && <p className="status mt-2">{msg}</p>}
+        {msg && <p className="status mt-2" role="status">{msg}</p>}
       </section>
 
       {/* ===== E-mail ===== */}
@@ -140,6 +140,9 @@ export default function Alerts() {
           <input
             value={listaEmails}
             placeholder={smtp?.destinatarios ? smtp.destinatarios.join(", ") : "gestor@empresa.com, outra@empresa.com"}
+            type="text"
+            inputMode="email"
+            autoComplete="off"
             onChange={(e) => setListaEmails(e.target.value)}
             disabled={!pode("admin")}
           />

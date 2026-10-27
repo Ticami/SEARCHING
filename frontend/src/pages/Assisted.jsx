@@ -322,7 +322,7 @@ export default function Assisted() {
             <p>Você aperta Próximo, o Chrome abre o produto e o preço e o print aparecem aqui. Uma página por clique.</p>
           </div>
           <div className="toolbar">
-            <span className={`chip ${ext.estado === "ok" ? "chip-active" : ""}`}>
+            <span className={`chip ${ext.estado === "ok" ? "chip-active" : ""}`} role="status" aria-live="polite">
               {ext.estado === "procurando" && "Procurando a extensão…"}
               {ext.estado === "ok" && `Extensão conectada (v${ext.versao})`}
               {ext.estado === "ausente" && "Extensão não detectada"}
@@ -354,7 +354,7 @@ export default function Assisted() {
             </div>
           </div>
         )}
-        {msg && <p className="status mt-2">{msg}</p>}
+        {msg && <p className="status mt-2" role="status">{msg}</p>}
         {foraDaFila.length > 0 && (
           <p className="note mt-2">Ficaram fora da sua fila (em coleta por outra pessoa): {foraDaFila.join(", ")}</p>
         )}

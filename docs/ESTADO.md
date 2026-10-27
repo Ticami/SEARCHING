@@ -3,7 +3,7 @@
 Arquivo de continuidade: qualquer sessão nova deve ler isto primeiro e **atualizá-lo ao terminar cada tarefa** (mover o item
 para "Feito" com o hash do commit, ajustar "Em andamento" e "Próximos passos" e incluir o arquivo no mesmo commit da tarefa).
 
-Última atualização: funcionalidades do tópico 3 (destinatários, assinaturas, resumo semanal, histórico de links) prontas; push ainda não feito (testes: 321 passando).
+Última atualização: tópico 4 (qualidade) pronto: blueprints, testes de interface (Vitest), acessibilidade e atualização da extensão documentada; push ainda não feito (backend 323 testes, interface 33).
 
 ## Resumo do projeto
 
@@ -48,17 +48,21 @@ relatórios. Dados 100% locais.
 
 ## Em andamento
 
-Nada no código. Multiusuário completo (Fases 0 a 4, ver `docs/DESENHO_MULTIUSUARIO.md` e `docs/IMPLANTACAO.md`) e, depois dele, o
-**reforço de segurança** (commit seguinte ao `7b46ce0`): limite de requisições em toda a API (por usuário/IP, em memória por processo),
-tela de sessões ativas com encerramento (própria e do admin), 2FA obrigatório para admin (`SEARCHING_2FA_ADMIN`, padrão ligado),
-lista de ids da extensão (`SEARCHING_EXTENSAO_IDS`) e retenção dos prints (`SEARCHING_RETENCAO_PRINTS_DIAS`, tela Usuários,
-`python -m searching.operacao reter-prints`). Modo local segue idêntico (sem login).
-**Validado em 2026-10-25:** `scripts/e2e_assistida.py` (local e `--hospedado`) com Chrome real, também depois do reforço de segurança;
-Docker (imagem construída; compose com PostgreSQL 16 + Caddy HTTPS no ar; login por HTTPS); suíte hospedada (81 testes) e `migrar-banco`
-(SQLite -> PostgreSQL, sequências OK) contra PostgreSQL real; `scripts/e2e_opcoes_extensao.py` (página de opções, registro dinâmico do
-ponte.js, servidor fixado, Desparear) contra o stack HTTPS. Correções feitas nesse caminho: `.dockerignore` (sem ele o `node_modules` do
-Windows quebrava a build e `.env`/dados iriam para a imagem), usuário do contêiner com home (gunicorn), espera do banco no compose.
-**Magalu real (HTML salvo pelo usuário em 2026-10-25, `backend/tests/fixtures/magalu_real_produto.html`):** título (h1), PIX (`price-value`) e menu de pagamento batem com os seletores; achados e corrigidos: o vendedor está em `seller-delivery-text` (antes ficava vazio) e a Magalu escreve **"01x"** no cartão (o regex só aceitava "1x", o que deixaria o cartão 1x sempre vazio). Teste novo cobre a página real inteira até `status OK`. **Ainda não validado:** a coleta ao vivo com a extensão na Magalu real (o usuário deve rodar e relatar) e a página de produto que traz outro layout (vendedor terceiro, indisponível).
+Nada no código. Concluídos: multiusuário (Fases 0 a 4), reforço de segurança (limite de requisições, sessões ativas, 2FA de admin, ids da
+extensão, retenção de prints), validações (Docker, PostgreSQL real, página de opções por HTTPS, Magalu real em HTML salvo), tópico 3
+(histórico de links, destinatários, assinaturas, resumo semanal) e **tópico 4 (qualidade)**:
+- `server.py` dividido em blueprints por assunto em `backend/searching/web/` (`rotas_conta`, `rotas_links`, `rotas_relatorios`,
+  `rotas_alertas`, `rotas_assistida`, `rotas_sistema`); os nomes das rotas na política mudaram para `blueprint.funcao`.
+- Testes de interface com Vitest + Testing Library (`cd frontend && npm test`, 33 testes: Login, Minha conta, Usuários, Coleta assistida
+  com extensão simulada, Histórico de links, Alertas), já no CI.
+- Acessibilidade e responsividade das telas novas, sem mudar o design: nomes acessíveis em campos e botões repetidos, `autocomplete`,
+  `role=status/alert`, `scope` e legenda nas tabelas, classe utilitária `.sr-only`; conferido num viewport de celular (375 px).
+  Achado e corrigido: o CSP do modo hospedado bloqueava o Google Fonts do design (agora libera `fonts.googleapis.com`/`gstatic`).
+- Atualização da extensão: `extensao/README.md` ("Atualizar a extensão"), `extensao/CHANGELOG.md`, extensão **2.1.0** que informa a
+  versão ao servidor e `SEARCHING_EXTENSAO_VERSAO_MINIMA` para forçar a atualização (erro 426).
+**Validado em 2026-10-27:** e2e local e `--hospedado` com Chrome real e a extensão 2.1.0.
+**Ainda não validado:** coleta ao vivo na Magalu real com a extensão (o usuário deve rodar e relatar); layouts de página diferentes
+(vendedor terceiro, indisponível); o e2e de opções (`e2e_opcoes_extensao.py`) com a 2.1.0 e o stack Docker.
 
 ## Próximos passos (sugestões)
 

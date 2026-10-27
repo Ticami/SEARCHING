@@ -350,3 +350,16 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 .faq details p { margin-top: 8px; color: var(--muted); font-size: 14px; line-height: 1.6; }
 .kbd { font-family: ui-monospace, "Cascadia Mono", monospace; font-size: 12px; padding: 1px 7px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 6px; background: rgba(255, 255, 255, 0.05); }
 html { scroll-behavior: smooth; }
+
+/* Texto só para leitores de tela (acessibilidade; não muda o visual) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

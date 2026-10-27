@@ -78,6 +78,23 @@ def extensao_autorizada(origem: str | None, env: dict | None = None) -> bool:
     return bool(origem) and origem.startswith(prefixo) and origem[len(prefixo):].rstrip("/") in ids
 
 
+def _versao(texto: str | None) -> tuple[int, ...]:
+    try:
+        return tuple(int(p) for p in (texto or "").strip().split("."))
+    except ValueError:
+        return ()
+
+
+def versao_da_extensao_ok(enviada: str | None, env: dict | None = None) -> tuple[bool, str]:
+    """SEARCHING_EXTENSAO_VERSAO_MINIMA (ex.: 2.1.0) força a atualização da extensão. Sem ela, qualquer versão vale.
+    Devolve (ok, versão mínima)."""
+    env = os.environ if env is None else env
+    minima = (env.get("SEARCHING_EXTENSAO_VERSAO_MINIMA") or "").strip()
+    if not minima:
+        return True, ""
+    return _versao(enviada) >= _versao(minima) and bool(_versao(enviada)), minima
+
+
 def host_permitido(cabecalho_host: str | None, env: dict | None = None) -> bool:
     """Evita DNS rebinding: o cabeçalho Host precisa ser um endereço local (ou, hospedado, o domínio público)."""
     if not cabecalho_host:

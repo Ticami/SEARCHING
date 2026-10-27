@@ -30,6 +30,7 @@ pelo Git, permissão `600`) ou o gerenciador de segredos do seu provedor.
 | `SEARCHING_ORIGENS` | Origens `https://` extras permitidas no CORS (raro). |
 | `SEARCHING_2FA_ADMIN` | `1` (padrão): administradores **precisam** ativar o 2FA para usar o sistema. `0` desliga. |
 | `SEARCHING_EXTENSAO_IDS` | Ids oficiais da extensão, separados por vírgula (o do Chrome e o do Edge são diferentes). Com a lista, o servidor só aceita capturas vindas de `chrome-extension://<id da lista>`, além do token. Vazio = só o token. |
+| `SEARCHING_EXTENSAO_VERSAO_MINIMA` | Versão mínima da extensão (ex.: `2.1.0`); mais antigas recebem erro 426 e precisam atualizar. Ver `extensao/README.md`. |
 | `SEARCHING_RETENCAO_PRINTS_DIAS` | Apaga prints com mais de N dias (0 = guardar para sempre). Também configurável na tela Usuários. |
 | `SEARCHING_PRINTS_ARQUIVO` | Se definido, os prints vencidos são movidos para esta pasta em vez de apagados. |
 | `SEARCHING_LIMITE_REQ_MIN`, `SEARCHING_LIMITE_ESCRITA_MIN`, `SEARCHING_LIMITE_EXPORTAR_MIN` | Limites por minuto, por usuário (ou por IP sem login): leitura 600, escrita 120, exportação 10. `0` desliga. Contados por processo do gunicorn. |

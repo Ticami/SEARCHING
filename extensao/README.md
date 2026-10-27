@@ -71,6 +71,32 @@ temporizador, não encadeia páginas e não esconde que é uma extensão.
 > A extensão pede a permissão `<all_urls>`: é a única forma de o navegador deixar uma extensão **tirar o print** da aba sem exigir
 > um clique no ícone a cada produto. O código restringe o que ela faz (veja abaixo) e é pequeno o bastante para auditar.
 
+## Atualizar a extensão
+
+O número da versão fica em `extensao/manifest.json` (`version`) e cada mudança é anotada em [`CHANGELOG.md`](CHANGELOG.md).
+
+**Publicar uma versão nova (quem mantém o projeto):**
+
+1. Mude o código, **aumente `version`** no `manifest.json` (as lojas recusam versão igual ou menor) e anote no `CHANGELOG.md`.
+2. Rode os testes: `node --check extensao/background.js`, a suíte do backend e `scripts/e2e_assistida.py` (e `--hospedado`).
+3. Gere o pacote: `python scripts/empacotar_extensao.py` → `dist/searching-extensao-<versão>.zip`.
+4. **Chrome Web Store** (Painel do desenvolvedor → seu item → *Pacote* → *Fazer upload de um novo pacote* → enviar para revisão).
+   Mantenha a visibilidade **Não listada**. A revisão leva de algumas horas a alguns dias; mudanças de permissões demoram mais e fazem o
+   navegador pedir nova aprovação ao usuário.
+5. **Edge Add-ons** (Partner Center → sua extensão → *Atualizar* → enviar o mesmo `.zip`). O id da extensão no Edge é diferente do Chrome.
+6. Depois de aprovada, o navegador de cada pessoa atualiza **sozinho** (em geral em até algumas horas; `chrome://extensions` →
+   *Atualizar* força na hora). Quem instalou por **política corporativa** recebe do mesmo jeito. Quem instalou **do .zip** (modo
+   desenvolvedor) precisa descompactar a versão nova na mesma pasta e clicar em *Recarregar* na extensão.
+
+**Forçar a atualização:** no servidor, defina `SEARCHING_EXTENSAO_VERSAO_MINIMA=2.1.0` (por exemplo). Extensões mais velhas passam a
+receber o erro "A extensão está desatualizada" (HTTP 426) e a tela de Coleta assistida mostra a mensagem. Use isso quando uma versão
+nova corrigir algo que o servidor não deve mais aceitar.
+
+**Ordem segura de uma atualização que muda a comunicação:** (1) publique o servidor novo primeiro, compatível com a extensão antiga
+(o servidor aceita capturas sem a chamada `autorizar`); (2) publique a extensão; (3) só depois de todos atualizarem, suba a versão
+mínima. O id da extensão **não muda** entre versões publicadas na mesma loja, então a lista `SEARCHING_EXTENSAO_IDS` continua valendo;
+já o id de quem carrega "sem compactação" é outro (use só para desenvolvimento).
+
 ## Segurança do pareamento (modo hospedado)
 
 - **Token por usuário**, com escopo mínimo: serve apenas para pedir autorização de abertura e enviar capturas **da sessão de coleta do

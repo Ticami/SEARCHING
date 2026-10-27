@@ -102,19 +102,28 @@ export function Login() {
     }
   };
 
+  const AUTOCOMPLETE = { email: "username", senha: "current-password", codigo: "one-time-code" };
   const campo = (rotulo, chave, tipo = "text") => (
     <label className="stack">
       <span className="note">{rotulo}</span>
-      <input className="input" type={tipo} value={form[chave]} onChange={(e) => setForm({ ...form, [chave]: e.target.value })} />
+      <input
+        className="input"
+        type={tipo}
+        value={form[chave]}
+        required
+        autoComplete={chave === "senha" && modoTela === "redefinir" ? "new-password" : AUTOCOMPLETE[chave]}
+        inputMode={chave === "codigo" ? "numeric" : undefined}
+        onChange={(e) => setForm({ ...form, [chave]: e.target.value })}
+      />
     </label>
   );
 
   return (
-    <div className="page" style={{ maxWidth: 420, margin: "10vh auto" }}>
+    <main className="page" style={{ maxWidth: 420, width: "100%", margin: "10vh auto", padding: "0 16px", boxSizing: "border-box" }}>
       <div className="card wide stack">
-        <h2 className="logo">SEARCHING</h2>
+        <h1 className="logo" style={{ fontSize: "1.5rem" }}>SEARCHING</h1>
         {modoTela === "entrar" && (
-          <form className="stack" onSubmit={entrar}>
+          <form className="stack" onSubmit={entrar} aria-label="Entrar">
             {campo("E-mail", "email", "email")}
             {campo("Senha", "senha", "password")}
             {precisaCodigo && campo("Código do autenticador", "codigo")}
@@ -123,21 +132,21 @@ export function Login() {
           </form>
         )}
         {modoTela === "recuperar" && (
-          <form className="stack" onSubmit={recuperar}>
+          <form className="stack" onSubmit={recuperar} aria-label="Recuperar senha">
             {campo("E-mail da conta", "email", "email")}
             <button className="btn primary" type="submit">Enviar link</button>
             <button className="btn ghost" type="button" onClick={() => { setModoTela("entrar"); setMsg(""); }}>Voltar</button>
           </form>
         )}
         {modoTela === "redefinir" && (
-          <form className="stack" onSubmit={redefinir}>
+          <form className="stack" onSubmit={redefinir} aria-label="Nova senha">
             {campo("Nova senha (mínimo 12 caracteres)", "senha", "password")}
             <button className="btn primary" type="submit">Salvar nova senha</button>
           </form>
         )}
-        {msg && <p className="status">{msg}</p>}
+        {msg && <p className="status" role="alert">{msg}</p>}
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -194,12 +203,12 @@ export function Conta() {
         <h3>{usuario.nome || usuario.email} <span className="chip">{usuario.papel}</span></h3>
         <form className="stack" onSubmit={trocar}>
           <label className="stack"><span className="note">Senha atual</span>
-            <input className="input" type="password" value={senha.atual} onChange={(e) => setSenha({ ...senha, atual: e.target.value })} /></label>
+            <input className="input" type="password" autoComplete="current-password" required value={senha.atual} onChange={(e) => setSenha({ ...senha, atual: e.target.value })} /></label>
           <label className="stack"><span className="note">Nova senha (mínimo 12 caracteres)</span>
-            <input className="input" type="password" value={senha.nova} onChange={(e) => setSenha({ ...senha, nova: e.target.value })} /></label>
+            <input className="input" type="password" autoComplete="new-password" required minLength={12} value={senha.nova} onChange={(e) => setSenha({ ...senha, nova: e.target.value })} /></label>
           <button className="btn primary" type="submit">Trocar senha</button>
         </form>
-        {msg && <p className="status">{msg}</p>}
+        {msg && <p className="status" role="status">{msg}</p>}
       </div>
 
       <div className="card wide stack">
@@ -207,7 +216,7 @@ export function Conta() {
         {usuario.totp_ativo ? <p className="note">Ativa.</p> : doisFatores ? (
           <div className="stack">
             <p className="note">Adicione ao aplicativo autenticador a chave: <code>{doisFatores.segredo}</code></p>
-            <input className="input" placeholder="Código de 6 dígitos" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+            <input className="input" aria-label="Código de 6 dígitos do autenticador" placeholder="Código de 6 dígitos" inputMode="numeric" autoComplete="one-time-code" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
             <button className="btn primary" onClick={ativar2fa}>Ativar</button>
           </div>
         ) : <button className="btn secondary" onClick={iniciar2fa}>Ativar verificação em duas etapas</button>}
@@ -216,11 +225,11 @@ export function Conta() {
       <div className="card wide stack">
         <h3>Sessões ativas</h3>
         {sessoes.map((x) => (
-          <div className="row" key={x.id}>
+          <div className="row" key={x.id} style={{ flexWrap: "wrap" }}>
             <span className="note">
               {x.atual ? "Esta sessão · " : ""}entrou em {x.criada_em} · último uso {x.ultimo_uso} · IP {x.ip || "—"} · {x.navegador || "navegador desconhecido"}
             </span>
-            <button className="btn ghost" onClick={() => encerrarSessao(x.id)}>{x.atual ? "Sair desta" : "Encerrar"}</button>
+            <button className="btn ghost" onClick={() => encerrarSessao(x.id)} aria-label={x.atual ? "Sair desta sessão" : `Encerrar a sessão de ${x.navegador || "outro navegador"} (${x.ip || "sem IP"})`}>{x.atual ? "Sair desta" : "Encerrar"}</button>
           </div>
         ))}
         {sessoes.length > 1 && <button className="btn secondary" onClick={encerrarOutras}>Encerrar todas as outras</button>}
@@ -233,11 +242,11 @@ export function Conta() {
           <button className="btn secondary" onClick={() => criarToken("leitura")}>Criar token de leitura</button>
           {usuario.papel !== "leitor" && <button className="btn secondary" onClick={() => criarToken("extensao")}>Criar token da extensão (colar nas opções)</button>}
         </div>
-        {novoToken && <p className="status">{novoToken.aviso} <code>{novoToken.token}</code></p>}
+        {novoToken && <p className="status" role="status">{novoToken.aviso} <code>{novoToken.token}</code></p>}
         {tokens.map((t) => (
-          <div className="row" key={t.id}>
+          <div className="row" key={t.id} style={{ flexWrap: "wrap" }}>
             <span>{t.tipo} · {t.nome} · {t.prefixo}… {t.revogado ? "(revogado)" : ""}</span>
-            {!t.revogado && <button className="btn ghost" onClick={() => revogar(t.id)}>Revogar</button>}
+            {!t.revogado && <button className="btn ghost" onClick={() => revogar(t.id)} aria-label={`Revogar o token ${t.nome || t.tipo} ${t.prefixo}`}>Revogar</button>}
           </div>
         ))}
       </div>
@@ -302,31 +311,31 @@ export function Usuarios() {
       <div className="card wide stack">
         <h3>Novo usuário</h3>
         <form className="grid-2" onSubmit={criar}>
-          <input className="input" placeholder="E-mail" value={novo.email} onChange={(e) => setNovo({ ...novo, email: e.target.value })} />
-          <input className="input" placeholder="Nome" value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} />
-          <select className="input" value={novo.papel} onChange={(e) => setNovo({ ...novo, papel: e.target.value })}>
+          <input className="input" type="email" required aria-label="E-mail do novo usuário" placeholder="E-mail" value={novo.email} onChange={(e) => setNovo({ ...novo, email: e.target.value })} />
+          <input className="input" aria-label="Nome do novo usuário" placeholder="Nome" value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} />
+          <select className="input" aria-label="Papel do novo usuário" value={novo.papel} onChange={(e) => setNovo({ ...novo, papel: e.target.value })}>
             <option value="leitor">leitor (só vê)</option><option value="coletor">coletor</option><option value="admin">admin</option>
           </select>
           <button className="btn primary" type="submit">Criar</button>
         </form>
-        {msg && <p className="status">{msg}</p>}
+        {msg && <p className="status" role="status">{msg}</p>}
       </div>
 
       {lista.map((u) => (
         <div className="card wide stack" key={u.id}>
-          <div className="row">
+          <div className="row" style={{ flexWrap: "wrap" }}>
             <strong>{u.nome || u.email}</strong> <span className="note">{u.email}</span>
-            <select className="input" value={u.papel} onChange={(e) => alterar(u.id, { papel: e.target.value })}>
+            <select className="input" aria-label={`Papel de ${u.nome || u.email}`} value={u.papel} onChange={(e) => alterar(u.id, { papel: e.target.value })}>
               <option value="leitor">leitor</option><option value="coletor">coletor</option><option value="admin">admin</option>
             </select>
-            <button className="btn ghost" onClick={() => alterar(u.id, { ativo: !u.ativo })}>{u.ativo ? "Desativar" : "Reativar"}</button>
-            <button className="btn ghost" onClick={() => redefinir(u.id)}>Redefinir senha</button>
-            <button className="btn ghost" onClick={() => verTokens(u.id)}>Tokens</button>
+            <button className="btn ghost" onClick={() => alterar(u.id, { ativo: !u.ativo })} aria-label={`${u.ativo ? "Desativar" : "Reativar"} ${u.nome || u.email}`}>{u.ativo ? "Desativar" : "Reativar"}</button>
+            <button className="btn ghost" onClick={() => redefinir(u.id)} aria-label={`Redefinir a senha de ${u.nome || u.email}`}>Redefinir senha</button>
+            <button className="btn ghost" onClick={() => verTokens(u.id)} aria-label={`Ver os tokens de ${u.nome || u.email}`}>Tokens</button>
           </div>
           {(tokens[u.id] || []).map((t) => (
-            <div className="row" key={t.id}>
+            <div className="row" key={t.id} style={{ flexWrap: "wrap" }}>
               <span className="note">{t.tipo} · {t.nome} · {t.prefixo}… · último uso {t.ultimo_uso || "nunca"} {t.revogado ? "(revogado)" : ""}</span>
-              {!t.revogado && <button className="btn ghost" onClick={() => revogar(u.id, t.id)}>Revogar</button>}
+              {!t.revogado && <button className="btn ghost" onClick={() => revogar(u.id, t.id)} aria-label={`Revogar o token ${t.nome || t.tipo} ${t.prefixo} de ${u.nome || u.email}`}>Revogar</button>}
             </div>
           ))}
           {u.papel === "coletor" && (
@@ -346,22 +355,22 @@ export function Usuarios() {
       <div className="card wide stack">
         <h3>Retenção dos prints</h3>
         <p className="note">Prints podem mostrar nome e CEP de quem coletou. Apague os antigos depois de N dias (0 = guardar para sempre). O histórico de preços continua.</p>
-        <div className="row">
+        <div className="row" style={{ flexWrap: "wrap" }}>
           <label className="row"><span className="note">Dias</span>
             <input className="input" type="number" min="0" max="3650" style={{ width: 100 }} value={retencao} onChange={(e) => setRetencao(e.target.value)} /></label>
           <button className="btn secondary" onClick={salvarRetencao}>Salvar</button>
           <button className="btn ghost" onClick={() => aplicarRetencao(true)}>Simular</button>
           <button className="btn ghost" onClick={() => window.confirm("Apagar agora os prints mais antigos que o prazo?") && aplicarRetencao(false)}>Aplicar agora</button>
         </div>
-        {msgRetencao && <p className="status">{msgRetencao}</p>}
+        {msgRetencao && <p className="status" role="status">{msgRetencao}</p>}
       </div>
 
       <div className="card wide stack">
         <h3>Sessões ativas de todos</h3>
         {sessoes.map((x) => (
-          <div className="row" key={x.id}>
+          <div className="row" key={x.id} style={{ flexWrap: "wrap" }}>
             <span className="note">{x.usuario} · último uso {x.ultimo_uso} · IP {x.ip || "—"}{x.atual ? " · (a sua)" : ""}</span>
-            {!x.atual && <button className="btn ghost" onClick={() => encerrarSessaoDe(x.id)}>Encerrar</button>}
+            {!x.atual && <button className="btn ghost" onClick={() => encerrarSessaoDe(x.id)} aria-label={`Encerrar a sessão de ${x.usuario} (${x.ip || "sem IP"})`}>Encerrar</button>}
           </div>
         ))}
       </div>
