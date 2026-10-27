@@ -3,7 +3,7 @@
 Arquivo de continuidade: qualquer sessão nova deve ler isto primeiro e **atualizá-lo ao terminar cada tarefa** (mover o item
 para "Feito" com o hash do commit, ajustar "Em andamento" e "Próximos passos" e incluir o arquivo no mesmo commit da tarefa).
 
-Última atualização: tópico 4 (qualidade) pronto: blueprints, testes de interface (Vitest), acessibilidade e atualização da extensão documentada; push ainda não feito (backend 323 testes, interface 33).
+Última atualização: extensão 2.1.1 (aba dedicada persistida) e menu lateral retrátil prontos; push ainda não feito (backend 323 testes, interface 40).
 
 ## Resumo do projeto
 
@@ -65,6 +65,11 @@ extensão, retenção de prints), validações (Docker, PostgreSQL real, página
   `chrome.tabs.get` e só então reaproveita; se a aba foi fechada, cria outra. O e2e ganhou o passo "para o service worker (CDP
   `ServiceWorker.stopAllWorkers`) e confere que continua 1 janela" (reproduz o defeito com a versão antiga: 2 -> 3 abas). Os e2e passaram
   a apontar para o Chrome for Testing do cache do Selenium: o Chrome instalado (mesma versão) passou a ser preferido e não aceita `--load-extension`.
+- **Menu lateral retrátil:** botão `«/»` no cabeçalho da barra (`frontend/src/sidebar.jsx`, usado em `App.jsx`), com `aria-expanded`,
+  `aria-controls` e `aria-label`, acessível por teclado; a escolha fica em `localStorage` (com try/catch: sem ele a tela funciona igual).
+  Recolhida, a barra vira uma faixa de 64 px só com o botão (o conteúdo ganha espaço); no celular (<= 860 px) começa recolhida, com o
+  logo e o botão numa linha. Só acrescentei classes `.sidebar-recolhida`/`.sidebar-toggle`/`.sr-only`; o visual aberto é o mesmo.
+  Testes Vitest em `src/test/sidebar.test.jsx` (7).
 **Validado em 2026-10-27:** e2e local e `--hospedado` com Chrome real e a extensão 2.1.0.
 **Ainda não validado:** coleta ao vivo na Magalu real com a extensão (o usuário deve rodar e relatar); layouts de página diferentes
 (vendedor terceiro, indisponível); o e2e de opções (`e2e_opcoes_extensao.py`) com a 2.1.0 e o stack Docker.

@@ -10,11 +10,13 @@ import Alerts from "./pages/Alerts";
 import Assisted from "./pages/Assisted";
 import LinkHistory from "./pages/LinkHistory";
 import { Conta, Login, Usuarios, useAuth } from "./auth.jsx";
+import { BotaoSidebar, useSidebarRecolhida } from "./sidebar.jsx";
 import "./styles/global.css";
 
 export default function App() {
   const { carregando, usuario, modo, pode, sair, precisa2fa } = useAuth();
   const [pendentes, setPendentes] = useState(0);
+  const [recolhida, alternarSidebar] = useSidebarRecolhida();
 
   // Contador de links aguardando revisão, mostrado no menu.
   useEffect(() => {
@@ -47,14 +49,15 @@ export default function App() {
 
   return (
     <Router>
-      <div className="layout">
+      <div className={`layout${recolhida ? " sidebar-recolhida" : ""}`}>
         <aside className="sidebar">
           <div className="sidebar-header">
             <h2 className="logo">SEARCHING</h2>
-            <span className="chip chip-active" style={{ padding: "6px 10px", fontSize: 12 }}>v1.2.0</span>
+            <span className="chip chip-active sidebar-versao" style={{ padding: "6px 10px", fontSize: 12 }}>v1.2.0</span>
+            <BotaoSidebar recolhida={recolhida} onAlternar={alternarSidebar} controla="menu-principal" />
           </div>
 
-          <nav>
+          <nav id="menu-principal" aria-label="Menu principal" hidden={recolhida}>
             <NavLink
               to="/"
               end
@@ -129,7 +132,7 @@ export default function App() {
             )}
           </nav>
 
-          <footer>by Mateus Ticami</footer>
+          <footer className="sidebar-rodape">by Mateus Ticami</footer>
         </aside>
 
         <main className="content">

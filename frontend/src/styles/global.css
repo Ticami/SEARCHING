@@ -92,6 +92,16 @@ p { margin: 0; }
 }
 .sidebar footer { margin-top: auto; color: var(--muted); font-size: 12px; opacity: 0.8; }
 
+/* Menu lateral retrátil: o botão alterna a classe .sidebar-recolhida no .layout */
+.sidebar { transition: width 0.2s ease, padding 0.2s ease; }
+.sidebar nav[hidden] { display: none; }
+.sidebar-toggle { padding: 6px 10px; min-width: 36px; line-height: 1; }
+.sidebar-recolhida .sidebar { width: 64px; padding: 26px 10px; }
+.sidebar-recolhida .sidebar-header { justify-content: center; }
+.sidebar-recolhida .sidebar .logo,
+.sidebar-recolhida .sidebar .sidebar-versao,
+.sidebar-recolhida .sidebar .sidebar-rodape { display: none; }
+
 .content {
   flex: 1;
   padding: 40px 44px 48px;
@@ -315,6 +325,9 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 @media (max-width: 860px) {
   .grid-2 { grid-template-columns: 1fr; }
   .sidebar { width: 100%; position: static; height: auto; }
+  .sidebar-recolhida .sidebar { width: 100%; padding: 14px 22px; }
+  .sidebar-recolhida .sidebar-header { justify-content: space-between; }
+  .sidebar-recolhida .sidebar .logo { display: block; }
   .layout { flex-direction: column; }
   .content { padding: 24px; }
   .hero { padding: 24px; }
