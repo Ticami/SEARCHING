@@ -13,6 +13,7 @@ Pré-requisito (o stack de teste, com o domínio `localhost` e certificado inter
 Cria (e remove no fim) um coletor de teste dentro do contêiner. O Chrome roda com --ignore-certificate-errors só porque o
 certificado do Caddy para `localhost` vem de uma autoridade interna. Abre uma janela do Chrome por cerca de um minuto.
 """
+import os
 import subprocess
 import sys
 import time
@@ -26,6 +27,14 @@ EXTENSAO = RAIZ / "extensao"
 PROJETO = "searching-teste"
 URL = "https://localhost"
 EMAIL, SENHA = "coletor-opcoes@e2e.teste", "Senha-Opcoes-Forte-1"
+
+
+def chrome_for_testing():
+    """Caminho do Chrome for Testing já baixado pelo Selenium (cache). O Chrome instalado no computador, quando é da mesma versão,
+    é preferido pelo Selenium Manager e NÃO aceita --load-extension; por isso o teste aponta direto para o Chrome for Testing."""
+    raiz = Path(os.environ.get("SE_CACHE_PATH") or Path.home() / ".cache" / "selenium") / "chrome"
+    achados = sorted(raiz.glob("*/*/chrome.exe")) or sorted(raiz.glob("*/*/chrome"))
+    return str(achados[-1]) if achados else None
 
 
 def compose(*args, entrada=None):
@@ -82,6 +91,8 @@ def main():
     try:
         opcoes = Options()
         opcoes.browser_version = "stable"
+        if chrome_for_testing():
+            opcoes.binary_location = chrome_for_testing()
         opcoes.add_argument(f"--load-extension={EXTENSAO}")  # a extensão REAL, sem nenhuma edição de teste
         opcoes.add_argument("--ignore-certificate-errors")
         opcoes.add_argument("--window-size=1400,1000")

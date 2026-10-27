@@ -14,6 +14,38 @@ let ultimaNavegacao = 0;
 let ocupado = false;
 let alvo = { tabId: null, windowId: null };
 
+// O service worker do MV3 é encerrado quando fica ocioso e as variáveis acima somem. A aba dedicada e o instante da última
+// navegação ficam também em chrome.storage.session (dura enquanto o navegador estiver aberto), para o worker reaproveitar a
+// MESMA janela depois de acordar em vez de abrir outra. O intervalo mínimo de 3 s continua sendo imposto também pelo servidor.
+const memoria = chrome.storage.session || chrome.storage.local;
+const CHAVE_ALVO = "abaDedicada";
+
+async function restaurarEstado() {
+  if (alvo.tabId != null) return;
+  try {
+    const salvo = (await memoria.get({ [CHAVE_ALVO]: null }))[CHAVE_ALVO];
+    if (salvo && salvo.tabId != null) {
+      alvo = { tabId: salvo.tabId, windowId: salvo.windowId };
+      ultimaNavegacao = Math.max(ultimaNavegacao, salvo.ultimaNavegacao || 0);
+    }
+  } catch { /* sem storage: segue só com a memória */ }
+}
+
+async function gravarEstado() {
+  try {
+    await memoria.set({ [CHAVE_ALVO]: { tabId: alvo.tabId, windowId: alvo.windowId, ultimaNavegacao } });
+  } catch { /* idem */ }
+}
+
+// se a pessoa fechar a aba dedicada, esquece-a (a próxima captura cria uma janela nova)
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  await restaurarEstado();
+  if (alvo.tabId === tabId) {
+    alvo = { tabId: null, windowId: null };
+    await gravarEstado();
+  }
+});
+
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function hostPermitido(url) {
@@ -69,18 +101,21 @@ function avisar(appTabId, dados) {
 
 // ---------- aba dedicada ----------
 async function garantirAba() {
+  await restaurarEstado();
   if (alvo.tabId != null) {
     try {
-      const t = await chrome.tabs.get(alvo.tabId);
+      const t = await chrome.tabs.get(alvo.tabId); // confirma que a aba ainda existe antes de reaproveitar
       alvo.windowId = t.windowId;
+      await gravarEstado();
       return alvo;
     } catch {
       alvo = { tabId: null, windowId: null };
     }
   }
-  // primeira vez: janela própria, para você arrastar para o outro monitor e deixar lá
+  // primeira vez (ou a aba foi fechada): janela própria, para você arrastar para o outro monitor e deixar lá
   const janela = await chrome.windows.create({ url: "about:blank", focused: false, state: "normal", width: 1280, height: 900 });
   alvo = { tabId: janela.tabs[0].id, windowId: janela.id };
+  await gravarEstado();
   return alvo;
 }
 
@@ -241,6 +276,7 @@ async function capturar(cmd, appTabId) {
 }
 
 async function navegar(cmd, sender) {
+  await restaurarEstado();
   const agora = Date.now();
   if (ocupado) return { ok: false, erro: "Ainda estou lendo a página anterior." };
   if (!hostPermitido(cmd.url)) return { ok: false, erro: "Endereço fora das lojas permitidas pela extensão." };
@@ -249,6 +285,7 @@ async function navegar(cmd, sender) {
 
   ocupado = true;
   ultimaNavegacao = agora;
+  await gravarEstado();
   const appTabId = sender.tab ? sender.tab.id : null;
   // mantém o service worker vivo enquanto a captura roda
   const vivo = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
@@ -265,6 +302,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
   (async () => {
     const daPaginaDeOpcoes = !!sender.url && sender.url.startsWith(chrome.runtime.getURL("opcoes.html"));
     if (msg.tipo === "ping") {
+      await restaurarEstado();
       const c = await config();
       return { ok: true, versao: VERSAO, pareado: !!c.token, janela: alvo.tabId != null, servidor: c.servidor };
     }

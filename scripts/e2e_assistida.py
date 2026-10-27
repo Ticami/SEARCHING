@@ -98,6 +98,14 @@ class Loja(BaseHTTPRequestHandler):
         pass
 
 
+def chrome_for_testing():
+    """Caminho do Chrome for Testing já baixado pelo Selenium (cache). O Chrome instalado no computador, quando é da mesma versão,
+    é preferido pelo Selenium Manager e NÃO aceita --load-extension; por isso o teste aponta direto para o Chrome for Testing."""
+    raiz = Path(os.environ.get("SE_CACHE_PATH") or Path.home() / ".cache" / "selenium") / "chrome"
+    achados = sorted(raiz.glob("*/*/chrome.exe")) or sorted(raiz.glob("*/*/chrome"))
+    return str(achados[-1]) if achados else None
+
+
 def http(url, corpo=None, metodo=None):
     req = urllib.request.Request(url, data=json.dumps(corpo).encode() if corpo is not None else None, method=metodo or ("POST" if corpo is not None else "GET"),
                                  headers={"Content-Type": "application/json"})
@@ -236,6 +244,8 @@ def main():
 
         opcoes = Options()
         opcoes.browser_version = "stable"  # Chrome for Testing (o Chrome oficial não aceita --load-extension)
+        if chrome_for_testing():
+            opcoes.binary_location = chrome_for_testing()
         opcoes.add_argument(f"--load-extension={ext}")
         opcoes.add_argument("--window-size=1500,1150")
         driver = webdriver.Chrome(options=opcoes)
@@ -269,9 +279,24 @@ def main():
         esperar_texto(driver, "R$ 1.199,00", 60)
         print("[ok] 2º produto aberto com a tecla de espaço: PIX R$ 1.199,00")
 
+        # service worker parado por ociosidade: a extensão precisa reaproveitar a MESMA janela, não abrir outra
+        janelas_antes = len(driver.window_handles)
+        driver.execute_cdp_cmd("ServiceWorker.enable", {})
+        driver.execute_cdp_cmd("ServiceWorker.stopAllWorkers", {})
+        def sw_ativo():
+            return any(t["type"] == "service_worker" and t["url"].startswith("chrome-extension://")
+                       for t in driver.execute_cdp_cmd("Target.getTargets", {})["targetInfos"])
+        fim = time.time() + 10
+        while time.time() < fim and sw_ativo():
+            time.sleep(0.3)
+        assert not sw_ativo(), "não consegui parar o service worker da extensão para o teste"
+        print("[ok] service worker da extensão parado (simula a ociosidade do MV3)")
+
         time.sleep(3.2)
         clicar(driver, "Próximo")
         tela = esperar_texto(driver, "BLOQUEIO", 60)
+        assert len(driver.window_handles) == janelas_antes, f"abriu janela nova: {janelas_antes} -> {len(driver.window_handles)}"
+        print(f"[ok] depois de acordar, a extensão reaproveitou a aba dedicada (continuam {janelas_antes} abas/janelas)")
         assert "Nada foi forçado" in tela
         print("[ok] 3º produto: a loja simulada bloqueou (403) e a tela mostrou BLOQUEIO, sem insistir")
 

@@ -60,6 +60,11 @@ extensão, retenção de prints), validações (Docker, PostgreSQL real, página
   Achado e corrigido: o CSP do modo hospedado bloqueava o Google Fonts do design (agora libera `fonts.googleapis.com`/`gstatic`).
 - Atualização da extensão: `extensao/README.md` ("Atualizar a extensão"), `extensao/CHANGELOG.md`, extensão **2.1.0** que informa a
   versão ao servidor e `SEARCHING_EXTENSAO_VERSAO_MINIMA` para forçar a atualização (erro 426).
+- **Extensão 2.1.1 (corrige janela duplicada):** a aba dedicada e o instante da última navegação agora ficam em `chrome.storage.session`
+  (o service worker MV3 é encerrado por ociosidade e a variável em memória se perdia). `garantirAba()` restaura, confirma com
+  `chrome.tabs.get` e só então reaproveita; se a aba foi fechada, cria outra. O e2e ganhou o passo "para o service worker (CDP
+  `ServiceWorker.stopAllWorkers`) e confere que continua 1 janela" (reproduz o defeito com a versão antiga: 2 -> 3 abas). Os e2e passaram
+  a apontar para o Chrome for Testing do cache do Selenium: o Chrome instalado (mesma versão) passou a ser preferido e não aceita `--load-extension`.
 **Validado em 2026-10-27:** e2e local e `--hospedado` com Chrome real e a extensão 2.1.0.
 **Ainda não validado:** coleta ao vivo na Magalu real com a extensão (o usuário deve rodar e relatar); layouts de página diferentes
 (vendedor terceiro, indisponível); o e2e de opções (`e2e_opcoes_extensao.py`) com a 2.1.0 e o stack Docker.
