@@ -58,7 +58,7 @@ def _limitar():
     if request.method == "OPTIONS" or request.path == "/api/health":
         return None
     lim = limite.limites()
-    if request.endpoint == "exportar_historico":
+    if request.endpoint == "relatorios.exportar_historico":
         categoria = "exportar"
     elif request.method not in METODOS_SEGUROS:
         categoria = "escrita"

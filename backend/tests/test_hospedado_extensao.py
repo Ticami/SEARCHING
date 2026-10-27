@@ -335,7 +335,7 @@ def test_so_o_navegador_do_coletor_importa_selenium():
     assert achados == []
     com_selenium = sorted(p.relative_to(raiz).as_posix() for p in raiz.rglob("*.py") if "selenium" in p.read_text(encoding="utf-8"))
     assert com_selenium  # existe (coletor automático, só modo local)
-    assert all(not f.startswith(("assistida", "auth/", "web_conta")) for f in com_selenium)
+    assert all(not f.startswith(("assistida", "auth/", "web/")) for f in com_selenium)
 
 
 def test_auditoria_registra_pareamento_e_revogacao(hosp):

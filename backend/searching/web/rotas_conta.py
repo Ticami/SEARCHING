@@ -4,12 +4,11 @@ from datetime import datetime, timedelta
 from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy import func, select
 
-from . import modo
-from .alerts import email as alertas_email
-from .auth import guarda, servico
-from .auth.guarda import COOKIE
-from . import retencao
-from .db.models import Assinatura, Atribuicao, Auditoria, Produto, SessaoLogin, TokenApi, Usuario
+from .. import modo, retencao
+from ..alerts import email as alertas_email
+from ..auth import guarda, servico
+from ..auth.guarda import COOKIE
+from ..db.models import Assinatura, Atribuicao, Auditoria, Produto, SessaoLogin, TokenApi, Usuario
 
 bp = Blueprint("conta", __name__)
 
@@ -402,7 +401,7 @@ def criar_usuario():
     with _fabrica()() as s:
         temporaria = None
         try:
-            from .auth import senhas
+            from ..auth import senhas
 
             temporaria = senhas.senha_temporaria()
             u = servico.criar_usuario(s, str(d.get("email", "")), str(d.get("nome", "")), str(d.get("papel", "leitor")),

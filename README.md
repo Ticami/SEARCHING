@@ -78,8 +78,10 @@ backend/searching/
   db/            modelos SQLAlchemy, links com histórico, migração dos CSVs antigos
   run.py         ponto de entrada da coleta (CLI)
   relatorios.py  consultas dos relatórios, Excel e painel de saúde
-  seguranca.py   proteções do servidor local
-backend/server.py   API Flask (só lê/grava o banco e dispara o CLI)
+  seguranca.py   proteções do servidor (loopback no modo local; Host/Origin/HTTPS no hospedado)
+  auth/          contas, sessões, tokens, 2FA, limite de requisições e a política de acesso de cada rota (politicas.py)
+  web/           as rotas da API, um blueprint por assunto: conta, links/revisões, relatórios, alertas, coleta assistida, sistema
+backend/server.py   monta o app (configuração, proteções, blueprints) e inicia o servidor
 backend/tests/      mais de 200 testes (pytest), com páginas HTML salvas como fixtures
 frontend/           React + Vite
 extensao/           extensão do Chrome da coleta assistida (Manifest V3)
