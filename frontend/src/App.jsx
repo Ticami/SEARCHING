@@ -13,6 +13,18 @@ import { Conta, Login, Usuarios, useAuth } from "./auth.jsx";
 import { BotaoSidebar, useSidebarRecolhida } from "./sidebar.jsx";
 import "./styles/global.css";
 
+// Item do menu: o ícone só aparece com a barra recolhida (o texto continua lido por leitores de tela e vira dica ao passar o mouse).
+function Item({ to, end, icone, selo, children, ...resto }) {
+  const texto = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
+  return (
+    <NavLink to={to} end={end} title={texto} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`} {...resto}>
+      <span className="nav-icone" aria-hidden="true">{icone}</span>
+      <span className="nav-texto">{children}</span>
+      {selo > 0 && <span className="nav-selo" aria-hidden="true">{selo}</span>}
+    </NavLink>
+  );
+}
+
 export default function App() {
   const { carregando, usuario, modo, pode, sair, precisa2fa } = useAuth();
   const [pendentes, setPendentes] = useState(0);
@@ -57,78 +69,25 @@ export default function App() {
             <BotaoSidebar recolhida={recolhida} onAlternar={alternarSidebar} controla="menu-principal" />
           </div>
 
-          <nav id="menu-principal" aria-label="Menu principal" hidden={recolhida}>
-            <NavLink
-              to="/"
-              end
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
-              Início
-            </NavLink>
-
-            <NavLink
-              to="/reports"
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
-              Relatórios
-            </NavLink>
-
-            <NavLink
-              to="/curves"
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
-              Curvas
-            </NavLink>
-
-            <NavLink
-              to="/prints"
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
-              Prints
-            </NavLink>
-
-            <NavLink
-              to="/links"
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
-              Links
-            </NavLink>
-
-            {pode("coletor") && (
-              <NavLink
-                to="/assisted"
-                className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-              >
-                Coleta assistida
-              </NavLink>
-            )}
-
-            <NavLink
-              to="/alerts"
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
-              Alertas
-            </NavLink>
-
-            <NavLink
-              to="/review"
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
+          <nav id="menu-principal" aria-label="Menu principal">
+            <Item to="/" end icone="🏠">Início</Item>
+            <Item to="/reports" icone="📊">Relatórios</Item>
+            <Item to="/curves" icone="📈">Curvas</Item>
+            <Item to="/prints" icone="🖼️">Prints</Item>
+            <Item to="/links" icone="🔗">Links</Item>
+            {pode("coletor") && <Item to="/assisted" icone="🧭">Coleta assistida</Item>}
+            <Item to="/alerts" icone="🔔">Alertas</Item>
+            <Item to="/review" icone="✅" selo={pendentes}>
               Revisão{pendentes > 0 ? ` (${pendentes})` : ""}
-            </NavLink>
+            </Item>
 
+            {modo === "hospedado" && <Item to="/conta" icone="👤">Minha conta</Item>}
+            {modo === "hospedado" && pode("admin") && <Item to="/usuarios" icone="👥">Usuários</Item>}
             {modo === "hospedado" && (
-              <NavLink to="/conta" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
-                Minha conta
-              </NavLink>
-            )}
-            {modo === "hospedado" && pode("admin") && (
-              <NavLink to="/usuarios" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
-                Usuários
-              </NavLink>
-            )}
-            {modo === "hospedado" && (
-              <button className="btn ghost" onClick={sair}>Sair ({usuario.papel})</button>
+              <button className="btn ghost" onClick={sair} title={`Sair (${usuario.papel})`}>
+                <span className="nav-icone" aria-hidden="true">🚪</span>
+                <span className="nav-texto">Sair ({usuario.papel})</span>
+              </button>
             )}
           </nav>
 

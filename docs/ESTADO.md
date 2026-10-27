@@ -69,6 +69,7 @@ extensão, retenção de prints), validações (Docker, PostgreSQL real, página
   `aria-controls` e `aria-label`, acessível por teclado; a escolha fica em `localStorage` (com try/catch: sem ele a tela funciona igual).
   Recolhida, a barra vira uma faixa de 64 px só com o botão (o conteúdo ganha espaço); no celular (<= 860 px) começa recolhida, com o
   logo e o botão numa linha. Só acrescentei classes `.sidebar-recolhida`/`.sidebar-toggle`/`.sr-only`; o visual aberto é o mesmo.
+  Recolhida, o menu vira uma faixa de **ícones** (os links mantêm nome acessível e `title`; o selo de revisões pendentes aparece como número). Aberta, não há ícones.
   Testes Vitest em `src/test/sidebar.test.jsx` (7).
 **Validado em 2026-10-27:** e2e local e `--hospedado` com Chrome real e a extensão 2.1.0.
 **Ainda não validado:** coleta ao vivo na Magalu real com a extensão (o usuário deve rodar e relatar); layouts de página diferentes

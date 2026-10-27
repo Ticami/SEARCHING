@@ -87,19 +87,23 @@ describe("Botão do menu lateral", () => {
 });
 
 describe("Menu lateral no App", () => {
-  it("o botão esconde o menu principal e o devolve", async () => {
+  it("recolhido, o menu vira uma faixa de ícones com os mesmos links acessíveis", async () => {
     api({
       "GET /api/auth/eu": { modo: "local", usuario: { id: null, email: "local", nome: "Uso local", papel: "admin" }, csrf: null, atribuidos: null },
       "GET /api/revisoes": [],
     });
     const u = userEvent.setup();
     render(<AuthProvider><App /></AuthProvider>);
-    const menu = await screen.findByRole("navigation", { name: "Menu principal" });
-    expect(menu).toBeVisible();
+    expect(await screen.findByRole("navigation", { name: "Menu principal" })).toBeVisible();
     await u.click(screen.getByRole("button", { name: "Recolher o menu lateral" }));
-    expect(screen.queryByRole("navigation", { name: "Menu principal" })).not.toBeInTheDocument(); // oculto: fora da árvore de acessibilidade
+    // recolhido: o menu continua ali (só ícones); cada link mantém o nome para leitores de tela e teclado
     expect(document.querySelector(".layout")).toHaveClass("sidebar-recolhida");
+    const nav = screen.getByRole("navigation", { name: "Menu principal" });
+    expect(screen.getByRole("link", { name: "Relatórios" })).toHaveAttribute("title", "Relatórios");
+    expect(nav.querySelectorAll(".nav-icone").length).toBeGreaterThanOrEqual(7);
+    expect(nav.querySelector(".nav-icone")).toHaveAttribute("aria-hidden", "true");
     await u.click(screen.getByRole("button", { name: "Expandir o menu lateral" }));
-    expect(screen.getByRole("navigation", { name: "Menu principal" })).toBeVisible();
+    expect(document.querySelector(".layout")).not.toHaveClass("sidebar-recolhida");
+    expect(screen.getByRole("link", { name: "Relatórios" })).toBeVisible();
   });
 });
